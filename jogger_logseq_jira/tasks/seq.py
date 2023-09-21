@@ -1,4 +1,15 @@
+import datetime
+
 from jogger.tasks import Task
+
+
+class Return(Exception):
+    """
+    Raised to trigger a return to the previous menu, or (if there is no
+    previous menu) to exit the program.
+    """
+    
+    pass
 
 
 class SeqTask(Task):
@@ -10,16 +21,28 @@ class SeqTask(Task):
     
     def handle(self, **options):
         
-        self.show_main_menu()
+        while True:
+            try:
+                handler = self.show_main_menu()
+            except Return:
+                # The main menu was used to exit the program
+                self.stdout.write('\nExiting...')
+                raise SystemExit()
+            
+            try:
+                handler()
+            except Return:
+                # The handler's process was interrupted in order to return to
+                # the main menu
+                pass
     
-    def show_menu(self, zero_option, *other_options):
+    def show_menu(self, return_option, *other_options):
         
         for i, option in enumerate(other_options, start=1):
             label = option[0]
             self.stdout.write(f'{i}. {label}')
         
-        zero_label, zero_handler = zero_option
-        self.stdout.write(f'0. {zero_label}')
+        self.stdout.write(f'0. {return_option}')
         
         handler = None
         while not handler:
@@ -31,30 +54,62 @@ class SeqTask(Task):
             try:
                 selection = int(selection)
                 if selection == 0:
-                    handler = zero_handler
-                else:
-                    handler = other_options[selection - 1][1]
+                    raise Return()
+                
+                handler = other_options[selection - 1][1]
             except (ValueError, IndexError):
                 self.stdout.write('Invalid selection.', style='error')
         
-        handler()
+        return handler
     
     def show_main_menu(self):
         
         self.stdout.write('\nChoose one of the following commands to execute:', style='label')
         
-        self.show_menu(
-            ('Exit (or Ctrl+C)', self.exit),
+        return self.show_menu(
+            'Exit (or Ctrl+C)',
             ('Log work to Jira', self.log_work),
         )
     
     def log_work(self):
         
-        print('logging work')
+        self.stdout.write('\nChoose which day to log work for. Default: today.', style='label')
+        self.stdout.write('Enter an offset from the current day. E.g. 0 = today, 1 = yesterday, 2 = the day before, etc.')
         
-        self.show_main_menu()
-    
-    def exit(self):
+        date = None
+        while not date:
+            offset = input('\nOffset (default=0): ')
+            if not offset:
+                offset = 0  # default to "today"
+            
+            try:
+                offset = int(offset)
+            except ValueError:
+                self.stdout.write('Offset must be a positive integer.', style='error')
+                continue
+            
+            if offset < 0:
+                self.stdout.write('Offset must be a positive integer.', style='error')
+                continue
+            
+            date = datetime.date.today() - datetime.timedelta(days=offset)
         
-        self.stdout.write('\nExiting...')
-        raise SystemExit()
+        self.stdout.write(f'Reading journal for: {date}', style='label')
+        print('-- read and summarise journal here --')
+        
+        self.stdout.write('\nJournal options:', style='label')
+        
+        handler = self.show_menu(
+            'Return to main menu',
+            
+            # TODO: Show summary and return to this menu
+            ('Show worklog summary', lambda: print('"worklog summary"')),
+            
+            # TODO: Submit via API and show prompt to mark all tasks as done
+            ('Submit worklog', lambda: print('submitted!')),
+            
+            # TODO: Mark all tasks as done and show prompt "hit ENTER to return to main menu"
+            ('Mark all tasks as done', lambda: print('all done!')),
+        )
+        
+        handler()
