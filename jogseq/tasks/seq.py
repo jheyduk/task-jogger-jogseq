@@ -2,16 +2,8 @@ import datetime
 
 from jogger.tasks import Task
 
+from ..exceptions import ParseError, Return
 from ..utils import parse_journal
-
-
-class Return(Exception):
-    """
-    Raised to trigger a return to the previous menu, or (if there is no
-    previous menu) to exit the program.
-    """
-    
-    pass
 
 
 class SeqTask(Task):
@@ -46,11 +38,15 @@ class SeqTask(Task):
             self.stderr.write('No graph path configured.')
             raise SystemExit(1)
         
+        journal = None
+        
         try:
             journal = parse_journal(graph_path, date)
         except FileNotFoundError:
-            journal = None
             self.stdout.write(f'No journal found for {date}', style='error')
+        except ParseError as e:
+            self.stdout.write(f'Error parsing journal for {date}: {e}', style='error')
+            raise Return()
         
         return journal
     

@@ -1,5 +1,7 @@
 import os
 
+from .exceptions import ParseError
+
 
 def parse_journal(graph_path, date):
     
@@ -101,6 +103,6 @@ class Journal(Block):
         if self._catch_all_block and self._catch_all_block is not block:
             # The journal already has a catch-all task registered, and it is
             # different to the one given
-            raise Exception('Only one CATCH-ALL block is supported.')
+            raise ParseError('Only a single CATCH-ALL block is supported per journal.')
         
         self._catch_all_block = block
