@@ -14,7 +14,7 @@ def run_seq(settings, stdout, stderr):
     path = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, path)
     
-    from jogger_logseq_jira.tasks import SeqTask
+    from jogseq.tasks import SeqTask
     
     task = TaskProxy('jog', 'seq', SeqTask, conf=JogConf())
     task.execute()  # TODO: passive=False in jogger 1.2+
