@@ -2,6 +2,8 @@ import datetime
 
 from jogger.tasks import Task
 
+from ..utils import parse_journal
+
 
 class Return(Exception):
     """
@@ -73,11 +75,14 @@ class SeqTask(Task):
     
     def log_work(self):
         
-        self.stdout.write('\nChoose which day to log work for. Default: today.', style='label')
-        self.stdout.write('Enter an offset from the current day. E.g. 0 = today, 1 = yesterday, 2 = the day before, etc.')
+        self.stdout.write('\nChoose which day to log work for. Defaults to today.', style='label')
+        self.stdout.write(
+            'Enter an offset from the current day. '
+            'E.g. 0 = today, 1 = yesterday, 2 = the day before, etc.'
+        )
         
-        date = None
-        while not date:
+        journal = None
+        while not journal:
             offset = input('\nOffset (default=0): ')
             if not offset:
                 offset = 0  # default to "today"
@@ -93,9 +98,16 @@ class SeqTask(Task):
                 continue
             
             date = datetime.date.today() - datetime.timedelta(days=offset)
+            
+            try:
+                journal = parse_journal(self.settings['graph_path'], date)
+            except FileNotFoundError:
+                self.stdout.write(f'No journal found for {date}', style='error')
         
-        self.stdout.write(f'Reading journal for: {date}', style='label')
-        print('-- read and summarise journal here --')
+        self.stdout.write(f'\nRead journal for: {date}', style='label')
+        
+        num_tasks = self.styler.label(len(journal.get_tasks()))
+        self.stdout.write(f'Found {num_tasks} unlogged tasks')
         
         self.stdout.write('\nJournal options:', style='label')
         

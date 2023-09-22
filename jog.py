@@ -4,6 +4,7 @@ import sys
 from jogger.tasks import LintTask
 from jogger.tasks._release import ReleaseTask
 from jogger.tasks.base import TaskProxy
+from jogger.utils.config import JogConf
 
 
 def run_seq(settings, stdout, stderr):
@@ -15,7 +16,7 @@ def run_seq(settings, stdout, stderr):
     
     from jogger_logseq_jira.tasks import SeqTask
     
-    task = TaskProxy('jog', 'seq', SeqTask, conf=None)
+    task = TaskProxy('jog', 'seq', SeqTask, conf=JogConf())
     task.execute()  # TODO: passive=False in jogger 1.2+
 
 
