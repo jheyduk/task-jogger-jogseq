@@ -38,6 +38,22 @@ class SeqTask(Task):
                 # the main menu
                 pass
     
+    def get_journal_from_date(self, date):
+        
+        try:
+            graph_path = self.settings['graph_path']
+        except KeyError:
+            self.stderr.write('No graph path configured.')
+            raise SystemExit(1)
+        
+        try:
+            journal = parse_journal(graph_path, date)
+        except FileNotFoundError:
+            journal = None
+            self.stdout.write(f'No journal found for {date}', style='error')
+        
+        return journal
+    
     def show_menu(self, return_option, *other_options):
         
         for i, option in enumerate(other_options, start=1):
@@ -99,10 +115,7 @@ class SeqTask(Task):
             
             date = datetime.date.today() - datetime.timedelta(days=offset)
             
-            try:
-                journal = parse_journal(self.settings['graph_path'], date)
-            except FileNotFoundError:
-                self.stdout.write(f'No journal found for {date}', style='error')
+            journal = self.get_journal_from_date(date)
         
         self.stdout.write(f'\nRead journal for: {date}', style='label')
         
