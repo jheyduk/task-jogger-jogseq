@@ -66,17 +66,6 @@ class Block:
     def add_line(self, content):
         
         self.extra_lines.append(content.strip())
-    
-    def get_tasks(self):
-        
-        tasks = []
-        for child in self.children:
-            if isinstance(child, Task):
-                tasks.append(child)
-            
-            tasks.extend(child.get_tasks())
-        
-        return tasks
 
 
 class Task(Block):
@@ -91,6 +80,7 @@ class Journal(Block):
         super().__init__(indent=-1, content='', parent=None)
         
         self._catch_all_block = None
+        self._tasks = None
     
     @property
     def catch_all_block(self):
@@ -106,3 +96,31 @@ class Journal(Block):
             raise ParseError('Only a single CATCH-ALL block is supported per journal.')
         
         self._catch_all_block = block
+    
+    @property
+    def tasks(self):
+        
+        if self._tasks is None:
+            raise Exception('Tasks not collated. Call process_tasks() first.')
+        
+        return self._tasks
+    
+    def process_tasks(self, date, switching_cost):
+        
+        def find_tasks(block):
+            tasks = []
+            for child in block.children:
+                if isinstance(child, Task):
+                    tasks.append(child)
+                
+                tasks.extend(find_tasks(child))
+            
+            return tasks
+        
+        all_tasks = self._tasks = find_tasks(self)
+        num_tasks = len(all_tasks)
+        
+        total_duration = 0  # TODO: Calculate
+        total_switching_cost = num_tasks * switching_cost
+        
+        return all_tasks, total_duration, total_switching_cost

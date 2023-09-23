@@ -50,6 +50,22 @@ class SeqTask(Task):
         
         return journal
     
+    def get_switching_cost(self):
+        
+        error = 'Invalid config: Switching cost must be a positive integer.'
+        
+        try:
+            cost = int(self.settings.get('switching_cost', 0))
+        except ValueError:
+            self.stderr.write(error)
+            raise SystemExit(1)
+        
+        if cost < 0:
+            self.stderr.write(error)
+            raise SystemExit(1)
+        
+        return cost
+    
     def show_menu(self, return_option, *other_options):
         
         for i, option in enumerate(other_options, start=1):
@@ -115,8 +131,14 @@ class SeqTask(Task):
         
         self.stdout.write(f'\nRead journal for: {date}', style='label')
         
-        num_tasks = self.styler.label(len(journal.get_tasks()))
+        switching_cost = self.get_switching_cost()
+        tasks, total_duration, total_switching_cost = journal.process_tasks(date, switching_cost)
+        
+        num_tasks = self.styler.label(len(tasks))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
+        
+        switching_cost_str = self.styler.label(total_switching_cost)
+        self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
         
         self.stdout.write('\nJournal options:', style='label')
         
