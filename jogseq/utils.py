@@ -58,6 +58,29 @@ def parse_duration_timestamp(timestamp_str):
     return hours * 3600 + minutes * 60 + seconds
 
 
+def round_duration(total_seconds):
+    
+    interval = 60 * 5  # 5 minutes
+    
+    # If a zero duration, report it as such. But for other durations less
+    # than the interval, report the interval as a minimum instead.
+    if not total_seconds:
+        return 0
+    elif total_seconds < interval:
+        return interval
+    
+    # Round to the most appropriate 5-minute interval
+    base, remainder = divmod(total_seconds, interval)
+    
+    duration = interval * base
+    
+    # If more than 90 seconds into the next interval, round up
+    if remainder > 90:
+        duration += interval
+    
+    return duration
+
+
 def format_duration(total_seconds):
     
     # Calculate hours, minutes, and seconds
@@ -158,6 +181,12 @@ class Task(Block):
             return None
         
         return content
+    
+    def get_total_duration(self):
+        
+        total = sum(log.duration for log in self.logbook)
+        
+        return round_duration(total)
 
 
 class Journal(Block):
@@ -209,8 +238,6 @@ class Journal(Block):
         
         total_switching_cost = (num_tasks * switching_cost) * 60  # in seconds
         
-        total_duration = 0
-        for task in all_tasks:
-            total_duration += sum(log.duration for log in task.logbook)
+        total_duration = sum(t.get_total_duration() for t in all_tasks)
         
         return all_tasks, total_duration, total_switching_cost
