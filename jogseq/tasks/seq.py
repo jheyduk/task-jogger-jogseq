@@ -145,6 +145,9 @@ class SeqTask(Task):
         switching_cost_str = self.styler.label(format_duration(total_switching_cost))
         self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
         
+        total_duration_str = self.styler.label(format_duration(total_duration))
+        self.stdout.write(f'Total duration: {total_duration_str}')
+        
         self.stdout.write('\nJournal options:', style='label')
         
         handler = self.show_menu(

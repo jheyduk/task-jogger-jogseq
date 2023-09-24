@@ -48,6 +48,16 @@ def parse_journal(graph_path, date):
     return journal
 
 
+def parse_duration_timestamp(timestamp_str):
+    
+    # Extract hours, minutes, and seconds from the string in H:M:S format,
+    # and cast as integers
+    hours, minutes, seconds = map(int, timestamp_str.split(':'))
+    
+    # Convert the duration into seconds
+    return hours * 3600 + minutes * 60 + seconds
+
+
 def format_duration(total_seconds):
     
     # Calculate hours, minutes, and seconds
@@ -64,6 +74,23 @@ def format_duration(total_seconds):
         parts.append(f'{seconds}s')
     
     return ' '.join(parts)
+
+
+class LogbookEntry:
+    
+    def __init__(self, content):
+        
+        self.content = content
+        self._duration = None
+    
+    @property
+    def duration(self):
+        
+        if self._duration is None:
+            duration_str = self.content.split('=>')[1].strip()
+            self._duration = parse_duration_timestamp(duration_str)
+        
+        return self._duration
 
 
 class Block:
@@ -108,7 +135,29 @@ class Block:
 
 class Task(Block):
     
-    pass
+    def __init__(self, *args, **kwargs):
+        
+        super().__init__(*args, **kwargs)
+        
+        self.logbook = []
+    
+    def _process_new_line(self, content):
+        
+        content = super()._process_new_line(content)
+        
+        # Ignore logbook start/end entries
+        if content in (':LOGBOOK:', ':END:'):
+            return None
+        elif content and content.startswith('CLOCK:'):
+            # Logbook timers started and stopped in the same second do
+            # not record a duration. They don't need to be processed or
+            # reproduced, they can be ignored.
+            if '=>' in content:
+                self.logbook.append(LogbookEntry(content))
+            
+            return None
+        
+        return content
 
 
 class Journal(Block):
@@ -158,7 +207,10 @@ class Journal(Block):
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
         
-        total_duration = 0  # TODO: Calculate
         total_switching_cost = (num_tasks * switching_cost) * 60  # in seconds
+        
+        total_duration = 0
+        for task in all_tasks:
+            total_duration += sum(log.duration for log in task.logbook)
         
         return all_tasks, total_duration, total_switching_cost
