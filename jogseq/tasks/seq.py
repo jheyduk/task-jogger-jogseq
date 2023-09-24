@@ -3,7 +3,7 @@ import datetime
 from jogger.tasks import Task
 
 from ..exceptions import ParseError, Return
-from ..utils import parse_journal
+from ..utils import format_duration, parse_journal
 
 
 class SeqTask(Task):
@@ -137,7 +137,7 @@ class SeqTask(Task):
         num_tasks = self.styler.label(len(tasks))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
         
-        switching_cost_str = self.styler.label(total_switching_cost)
+        switching_cost_str = self.styler.label(format_duration(total_switching_cost))
         self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
         
         self.stdout.write('\nJournal options:', style='label')

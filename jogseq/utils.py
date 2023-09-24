@@ -48,6 +48,24 @@ def parse_journal(graph_path, date):
     return journal
 
 
+def format_duration(total_seconds):
+    
+    # Calculate hours, minutes, and seconds
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    # Create the formatted duration string
+    parts = []
+    if hours > 0:
+        parts.append(f'{hours}h')
+    if minutes > 0:
+        parts.append(f'{minutes}m')
+    if seconds > 0 or not parts:
+        parts.append(f'{seconds}s')
+    
+    return ' '.join(parts)
+
+
 class Block:
     
     def __init__(self, indent, content, parent=None):
@@ -121,6 +139,6 @@ class Journal(Block):
         num_tasks = len(all_tasks)
         
         total_duration = 0  # TODO: Calculate
-        total_switching_cost = num_tasks * switching_cost
+        total_switching_cost = (num_tasks * switching_cost) * 60  # in seconds
         
         return all_tasks, total_duration, total_switching_cost
