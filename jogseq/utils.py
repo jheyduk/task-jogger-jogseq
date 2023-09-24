@@ -75,15 +75,35 @@ class Block:
         
         self.content = content.replace('-', '', 1).strip()
         
+        self.properties = {}
         self.extra_lines = []
         self.children = []
         
         if parent:
             parent.children.append(self)
     
+    def _process_new_line(self, content):
+        
+        if content and content.split()[0].endswith('::'):
+            # The line is a property of the block
+            key, value = content.split('::', 1)
+            
+            if key in self.properties:
+                raise ParseError(f'Duplicate property "{key}" for block "{self.content}".')
+            
+            self.properties[key] = value.strip()
+            return None
+        
+        return content
+    
     def add_line(self, content):
         
-        self.extra_lines.append(content.strip())
+        content = content.strip()
+        
+        content = self._process_new_line(content)
+        
+        if content is not None:  # allow blank lines, just not explicitly nullified lines
+            self.extra_lines.append(content)
 
 
 class Task(Block):
