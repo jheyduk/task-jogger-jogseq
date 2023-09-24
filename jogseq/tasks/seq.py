@@ -106,6 +106,42 @@ class SeqTask(Task):
             ('Log work to Jira', self.log_work),
         )
     
+    def show_journal_summary(self, date, journal):
+        
+        self.stdout.write(f'\nRead journal for: {date}', style='label')
+        
+        switching_cost = self.get_switching_cost()
+        result = journal.process_tasks(date, switching_cost)
+        
+        num_tasks = self.styler.label(len(result['tasks']))
+        self.stdout.write(f'Found {num_tasks} unlogged tasks')
+        
+        switching_cost_str = self.styler.label(format_duration(result['total_switching_cost']))
+        self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
+        
+        if journal.catch_all_block:
+            cost_inclusion_str = self.styler.success('(including switching cost)')
+        else:
+            cost_inclusion_str = self.styler.error('(not including switching cost)')
+        
+        total_duration_str = self.styler.label(format_duration(result['total_duration']))
+        self.stdout.write(f'Total duration (rounded): {total_duration_str} {cost_inclusion_str}')
+        
+        log = result['log']
+        if log:
+            self.stdout.write('')  # blank line
+            
+            for level, msg in log:
+                if level == 'error':
+                    styler = self.styler.error
+                elif level == 'warning':
+                    styler = self.styler.warning
+                else:
+                    styler = self.styler.label
+                
+                prefix = styler(f'[{level.upper()}]')
+                self.stdout.write(f'{prefix} {msg}')
+    
     def log_work(self):
         
         self.stdout.write('\nChoose which day to log work for. Defaults to today.', style='label')
@@ -134,24 +170,7 @@ class SeqTask(Task):
             
             journal = self.get_journal_from_date(date)
         
-        self.stdout.write(f'\nRead journal for: {date}', style='label')
-        
-        switching_cost = self.get_switching_cost()
-        tasks, total_duration, total_switching_cost = journal.process_tasks(date, switching_cost)
-        
-        num_tasks = self.styler.label(len(tasks))
-        self.stdout.write(f'Found {num_tasks} unlogged tasks')
-        
-        switching_cost_str = self.styler.label(format_duration(total_switching_cost))
-        self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
-        
-        if journal.catch_all_block:
-            cost_inclusion_str = self.styler.success('(including switching cost)')
-        else:
-            cost_inclusion_str = self.styler.error('(not including switching cost)')
-        
-        total_duration_str = self.styler.label(format_duration(total_duration))
-        self.stdout.write(f'Total duration (rounded): {total_duration_str} {cost_inclusion_str}')
+        self.show_journal_summary(date, journal)
         
         self.stdout.write('\nJournal options:', style='label')
         

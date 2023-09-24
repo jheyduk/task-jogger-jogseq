@@ -118,6 +118,18 @@ def format_duration(total_seconds):
     return ' '.join(parts)
 
 
+def find_tasks(block):
+    
+    tasks = []
+    for child in block.children:
+        if isinstance(child, Task):
+            tasks.append(child)
+        
+        tasks.extend(find_tasks(child))
+    
+    return tasks
+
+
 class LogbookEntry:
     
     @classmethod
@@ -224,6 +236,20 @@ class Task(Block):
         
         self.logbook.insert(0, entry)
     
+    def validate(self):
+        
+        errors = {}
+        
+        def add_error(error_type, error):
+            
+            errors.setdefault(error_type, [])
+            errors[error_type].append(error)
+        
+        if 'time' in self.properties:
+            add_error('duration', 'Invalid format for "time" property')
+        
+        return errors
+    
     def get_total_duration(self):
         
         total = sum(log.duration for log in self.logbook)
@@ -265,18 +291,20 @@ class Journal(Block):
     
     def process_tasks(self, date, switching_cost):
         
-        def find_tasks(block):
-            tasks = []
-            for child in block.children:
-                if isinstance(child, Task):
-                    tasks.append(child)
-                
-                tasks.extend(find_tasks(child))
-            
-            return tasks
-        
+        log = []
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
+        
+        # Calculate and log context switching cost (in seconds)
+        total_switching_cost = round_duration((num_tasks * switching_cost) * 60)
+        catch_all_block = self.catch_all_block
+        if catch_all_block:
+            catch_all_block.add_to_logbook(date, total_switching_cost)
+        elif total_switching_cost > 0:
+            log.append(('warning', (
+                'No CATCH-ALL task found to log context switching cost against. '
+                'Not included in total duration.'
+            )))
         
         # Check tasks for a time:: property and convert it to a logbook entry
         # if found
@@ -284,22 +312,35 @@ class Journal(Block):
             if 'time' not in task.properties:
                 continue
             
-            time_value = task.properties.pop('time')
+            time_value = task.properties['time']
             
-            # Manually-entered times are likely to be rounded already, but
-            # just in case...
-            time_value = round_duration(parse_duration_input(time_value))
+            # If the value isn't a valid duration string, leave the property
+            # in place as a flag that the task isn't valid to be logged.
+            # Otherwise remove it and replace it with a logbook entry.
+            try:
+                time_value = parse_duration_input(time_value)
+            except ParseError:
+                pass
+            else:
+                del task.properties['time']
+                
+                # Manually-entered times are likely to be rounded already, but
+                # just in case...
+                time_value = round_duration(time_value)
+                
+                task.add_to_logbook(date, time_value)
             
-            task.add_to_logbook(date, time_value)
+            errors = task.validate()
+            for messages in errors.values():
+                for msg in messages:
+                    log.append(('error', f'{msg} for line "{task.content}"'))
         
-        # Calculate and log context switching cost (in seconds)
-        total_switching_cost = round_duration((num_tasks * switching_cost) * 60)
-        catch_all_block = self.catch_all_block
-        if catch_all_block:
-            catch_all_block.add_to_logbook(date, total_switching_cost)
-        
-        # Calculate the total duration. Will include switching cost if a
-        # catch-all task exists to log it against.
+        # Calculate the total duration
         total_duration = sum(t.get_total_duration() for t in all_tasks)
         
-        return all_tasks, total_duration, total_switching_cost
+        return {
+            'tasks': all_tasks,
+            'total_duration': total_duration,
+            'total_switching_cost': total_switching_cost,
+            'log': log
+        }
