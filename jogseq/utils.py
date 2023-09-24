@@ -1,3 +1,4 @@
+import datetime
 import os
 
 from .exceptions import ParseError
@@ -101,6 +102,23 @@ def format_duration(total_seconds):
 
 class LogbookEntry:
     
+    @classmethod
+    def from_duration(cls, date, duration):
+        
+        # Fudge some timestamps and format a compatible logbook entry based
+        # on the duration
+        start_time = datetime.datetime(date.year, month=date.month, day=date.day, hour=0, minute=0)
+        end_time = start_time + datetime.timedelta(seconds=duration)
+        
+        date_format = '%Y-%m-%d %a %H:%M:%S'
+        start_time_str = start_time.strftime(date_format)
+        end_time_str = end_time.strftime(date_format)
+        
+        hours, remainder = divmod(duration, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        return cls(f'CLOCK: [{start_time_str}]--[{end_time_str}] => {hours:02}:{minutes:02}:{seconds:02}')
+    
     def __init__(self, content):
         
         self.content = content
@@ -182,6 +200,12 @@ class Task(Block):
         
         return content
     
+    def add_to_logbook(self, date, duration):
+        
+        entry = LogbookEntry.from_duration(date, duration)
+        
+        self.logbook.insert(0, entry)
+    
     def get_total_duration(self):
         
         total = sum(log.duration for log in self.logbook)
@@ -236,8 +260,14 @@ class Journal(Block):
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
         
-        total_switching_cost = (num_tasks * switching_cost) * 60  # in seconds
+        # Calculate and log context switching cost (in seconds)
+        total_switching_cost = round_duration((num_tasks * switching_cost) * 60)
+        catch_all_block = self.catch_all_block
+        if catch_all_block:
+            catch_all_block.add_to_logbook(date, total_switching_cost)
         
+        # Calculate the total duration. Will include switching cost if a
+        # catch-all task exists to log it against.
         total_duration = sum(t.get_total_duration() for t in all_tasks)
         
         return all_tasks, total_duration, total_switching_cost

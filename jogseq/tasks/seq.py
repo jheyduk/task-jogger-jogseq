@@ -145,8 +145,13 @@ class SeqTask(Task):
         switching_cost_str = self.styler.label(format_duration(total_switching_cost))
         self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
         
+        if journal.catch_all_block:
+            cost_inclusion_str = self.styler.success('(including switching cost)')
+        else:
+            cost_inclusion_str = self.styler.error('(not including switching cost)')
+        
         total_duration_str = self.styler.label(format_duration(total_duration))
-        self.stdout.write(f'Total duration: {total_duration_str}')
+        self.stdout.write(f'Total duration: {total_duration_str} {cost_inclusion_str}')
         
         self.stdout.write('\nJournal options:', style='label')
         
