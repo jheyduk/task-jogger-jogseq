@@ -151,7 +151,7 @@ class SeqTask(Task):
             cost_inclusion_str = self.styler.error('(not including switching cost)')
         
         total_duration_str = self.styler.label(format_duration(total_duration))
-        self.stdout.write(f'Total duration: {total_duration_str} {cost_inclusion_str}')
+        self.stdout.write(f'Total duration (rounded): {total_duration_str} {cost_inclusion_str}')
         
         self.stdout.write('\nJournal options:', style='label')
         

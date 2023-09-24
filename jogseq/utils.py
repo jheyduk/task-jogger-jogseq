@@ -59,6 +59,24 @@ def parse_duration_timestamp(timestamp_str):
     return hours * 3600 + minutes * 60 + seconds
 
 
+def parse_duration_input(input_str):
+    
+    # Extract hours and minutes from the string in "Xh Ym" format, and cast
+    # as integers
+    parts = input_str.split()
+    hours, minutes = 0, 0
+    for part in parts:
+        if part.endswith('h'):
+            hours = int(part[:-1])
+        elif part.endswith('m'):
+            minutes += int(part[:-1])
+        else:
+            raise ParseError('Invalid duration string format. Only hours and minutes are supported.')
+    
+    # Convert the duration into seconds
+    return hours * 3600 + minutes * 60
+
+
 def round_duration(total_seconds):
     
     interval = 60 * 5  # 5 minutes
@@ -259,6 +277,20 @@ class Journal(Block):
         
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
+        
+        # Check tasks for a time:: property and convert it to a logbook entry
+        # if found
+        for task in all_tasks:
+            if 'time' not in task.properties:
+                continue
+            
+            time_value = task.properties.pop('time')
+            
+            # Manually-entered times are likely to be rounded already, but
+            # just in case...
+            time_value = round_duration(parse_duration_input(time_value))
+            
+            task.add_to_logbook(date, time_value)
         
         # Calculate and log context switching cost (in seconds)
         total_switching_cost = round_duration((num_tasks * switching_cost) * 60)
