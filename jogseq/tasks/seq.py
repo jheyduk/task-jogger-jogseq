@@ -1,4 +1,5 @@
 import datetime
+from os import path
 
 from jogger.tasks import Task
 
@@ -35,7 +36,11 @@ class SeqTask(Task):
         try:
             graph_path = self.settings['graph_path']
         except KeyError:
-            self.stderr.write('No graph path configured.')
+            self.stderr.write('Invalid config: No graph path configured.')
+            raise SystemExit(1)
+        
+        if not path.exists(graph_path):
+            self.stderr.write('Invalid config: Graph path does not exist.')
             raise SystemExit(1)
         
         journal = None
