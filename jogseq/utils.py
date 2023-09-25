@@ -1,7 +1,10 @@
 import datetime
 import os
+import re
 
 from .exceptions import ParseError
+
+TASK_ID_RE = re.compile(r'^([A-Z]+-\d+):?$')
 
 
 def parse_journal(graph_path, date):
@@ -210,6 +213,29 @@ class Task(Block):
         
         super().__init__(*args, **kwargs)
         
+        # Split content into keyword (e.g. LATER), task ID, and any optional
+        # remaining content
+        keyword, *remainder = self.content.split(' ', 2)
+        
+        # At least one item in the remainder should always exist, because
+        # Tasks are only created if a matching keyword *followed by a space*
+        # is found at the start of the line's content
+        task_id = remainder[0]
+        if TASK_ID_RE.match(task_id):
+            # Remove the task ID from the remainder - the rest (if any) will be
+            # the task description
+            task_id = task_id.strip(':')
+            description = remainder[1:]
+        else:
+            # The first item of the remainder does not appear to be a task ID,
+            # consider it part of the description
+            task_id = None
+            description = remainder
+        
+        self.keyword = keyword
+        self.task_id = task_id
+        self.description = ' '.join(description)
+        
         self.logbook = []
     
     def _process_new_line(self, content):
@@ -245,6 +271,27 @@ class Task(Block):
             errors.setdefault(error_type, [])
             errors[error_type].append(error)
         
+        # Ensure the task's timer isn't currently running
+        if self.keyword == 'NOW':
+            add_error('keyword', 'Running timer detected')
+        
+        # Ensure the task is not a child of another task
+        p = self.parent
+        while p:
+            if isinstance(p, Task):
+                add_error('keyword', 'Nested task detected')
+                break
+            
+            p = p.parent
+        
+        # Ensure the task has an ID and a duration
+        if not self.task_id:
+            add_error('task_id', 'No task ID')
+        
+        if not self.logbook:
+            add_error('duration', 'No duration recorded')
+        
+        # If a type:: property remains, it's because it's in an invalid format
         if 'time' in self.properties:
             add_error('duration', 'Invalid format for "time" property')
         
@@ -313,26 +360,25 @@ class Journal(Block):
         # Check tasks for a time:: property and convert it to a logbook entry
         # if found
         for task in all_tasks:
-            if 'time' not in task.properties:
-                continue
-            
-            time_value = task.properties['time']
-            
-            # If the value isn't a valid duration string, leave the property
-            # in place as a flag that the task isn't valid to be logged.
-            # Otherwise remove it and replace it with a logbook entry.
-            try:
-                time_value = parse_duration_input(time_value)
-            except ParseError:
-                pass
-            else:
-                del task.properties['time']
+            if 'time' in task.properties:
+                time_value = task.properties['time']
                 
-                # Manually-entered times are likely to be rounded already, but
-                # just in case...
-                time_value = round_duration(time_value)
-                
-                task.add_to_logbook(date, time_value)
+                # If the value isn't a valid duration string, leave the
+                # property in place as a flag that the task isn't valid to
+                # be logged. Otherwise remove it and replace it with a
+                # logbook entry.
+                try:
+                    time_value = parse_duration_input(time_value)
+                except ParseError:
+                    pass
+                else:
+                    del task.properties['time']
+                    
+                    # Manually-entered times are likely to be rounded already,
+                    # but just in case...
+                    time_value = round_duration(time_value)
+                    
+                    task.add_to_logbook(date, time_value)
             
             errors = task.validate()
             for messages in errors.values():
