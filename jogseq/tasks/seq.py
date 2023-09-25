@@ -106,12 +106,12 @@ class SeqTask(Task):
             ('Log work to Jira', self.log_work),
         )
     
-    def show_journal_summary(self, date, journal):
+    def show_journal_summary(self, journal):
         
-        self.stdout.write(f'\nRead journal for: {date}', style='label')
+        self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
         
         switching_cost = self.get_switching_cost()
-        result = journal.process_tasks(date, switching_cost)
+        result = journal.process_tasks(switching_cost)
         
         num_tasks = self.styler.label(len(result['tasks']))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
@@ -170,7 +170,7 @@ class SeqTask(Task):
             
             journal = self.get_journal_from_date(date)
         
-        self.show_journal_summary(date, journal)
+        self.show_journal_summary(journal)
         
         self.stdout.write('\nJournal options:', style='label')
         

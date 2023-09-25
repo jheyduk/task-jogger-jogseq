@@ -8,7 +8,7 @@ def parse_journal(graph_path, date):
     
     journal_path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
     
-    journal = Journal()
+    journal = Journal(date)
     current_block = journal
     
     with open(journal_path, 'r') as f:
@@ -259,9 +259,11 @@ class Task(Block):
 
 class Journal(Block):
     
-    def __init__(self):
+    def __init__(self, date):
         
         super().__init__(indent=-1, content='', parent=None)
+        
+        self.date = date
         
         self._catch_all_block = None
         self._tasks = None
@@ -289,9 +291,11 @@ class Journal(Block):
         
         return self._tasks
     
-    def process_tasks(self, date, switching_cost):
+    def process_tasks(self, switching_cost):
         
         log = []
+        date = self.date
+        
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
         
