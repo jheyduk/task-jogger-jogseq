@@ -8,6 +8,15 @@ TASK_ID_RE = re.compile(r'^([A-Z]+-\d+):?$')
 
 
 def parse_journal(graph_path, date):
+    """
+    Given a base graph path and a date, locate and parse the markdown file for
+    the date's journal entry. Return a ``Journal`` instance representing the
+    parsed journal.
+    
+    :param graph_path: The path to the directory containing the Logseq graph.
+    :param date: The date of the journal to locate and parse, as a ``date`` instance.
+    :return: A ``Journal`` instance for the given date.
+    """
     
     journal_path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
     
@@ -53,9 +62,16 @@ def parse_journal(graph_path, date):
 
 
 def parse_duration_timestamp(timestamp_str):
+    """
+    Return the number of seconds represented by the given duration timestamp
+    string. The string should be in the format "H:M:S", representing the hours,
+    minutes, and seconds comprising the duration.
     
-    # Extract hours, minutes, and seconds from the string in H:M:S format,
-    # and cast as integers
+    :param timestamp_str: The duration timestamp string.
+    :return: The number of seconds represented by the duration timestamp string.
+    """
+    
+    # Extract hours, minutes, and seconds from the string and cast as integers
     hours, minutes, seconds = map(int, timestamp_str.split(':'))
     
     # Convert the duration into seconds
@@ -63,9 +79,16 @@ def parse_duration_timestamp(timestamp_str):
 
 
 def parse_duration_input(input_str):
+    """
+    Return the number of seconds represented by the given duration input string.
+    The string should be in the format "Xh Ym", representing the hours and
+    minutes comprising the duration.
     
-    # Extract hours and minutes from the string in "Xh Ym" format, and cast
-    # as integers
+    :param input_str: The duration input string.
+    :return: The number of seconds represented by the duration input string.
+    """
+    
+    # Extract hours and minutes from the string and cast as integers
     parts = input_str.split()
     hours, minutes = 0, 0
     for part in parts:
@@ -81,6 +104,17 @@ def parse_duration_input(input_str):
 
 
 def round_duration(total_seconds):
+    """
+    Round the given number of seconds to the most appropriate 5-minute interval
+    and return the new value in seconds. This usually means rounding up to the
+    next 5-minute interval, but the value will be rounded down if:
+    
+    * it is not 0 (any value over 0 is rounded up to 300, at least)
+    * it is less than 90 seconds into the next interval
+    
+    :param total_seconds: The duration to round, in seconds.
+    :return: The rounded value, in seconds.
+    """
     
     interval = 60 * 5  # 5 minutes
     
@@ -104,6 +138,13 @@ def round_duration(total_seconds):
 
 
 def format_duration(total_seconds):
+    """
+    Return a human-readable string describing the given duration in hours,
+    minutes, and seconds. E.g. 1h 30m.
+    
+    :param total_seconds: The duration, in seconds.
+    :return: The string representation of the duration.
+    """
     
     # Calculate hours, minutes, and seconds
     hours, remainder = divmod(total_seconds, 3600)
@@ -122,6 +163,13 @@ def format_duration(total_seconds):
 
 
 def find_tasks(block):
+    """
+    Return a list of the tasks nested under the given ``Block`` instance,
+    by recursively iterating through its children.
+    
+    :param block: The ``Block`` instance.
+    :return: The list of found ``Task`` instances.
+    """
     
     tasks = []
     for child in block.children:
@@ -134,9 +182,21 @@ def find_tasks(block):
 
 
 class LogbookEntry:
+    """
+    A parsed logbook entry for a Logseq block.
+    """
     
     @classmethod
     def from_duration(cls, date, duration):
+        """
+        Create a new ``LogbookEntry`` based on the given date and duration.
+        Generate some fake timestamps, starting at midnight on the given date,
+        to build a compatible content line.
+        
+        :param date: The date on which the logbook entry should be made.
+        :param duration: The duration of the logbook entry, in seconds.
+        :return: The created ``LogbookEntry`` instance.
+        """
         
         # Fudge some timestamps and format a compatible logbook entry based
         # on the duration
@@ -159,6 +219,9 @@ class LogbookEntry:
     
     @property
     def duration(self):
+        """
+        The duration represented by the logbook entry, in seconds.
+        """
         
         if self._duration is None:
             duration_str = self.content.split('=>')[1].strip()
@@ -168,6 +231,15 @@ class LogbookEntry:
 
 
 class Block:
+    """
+    A parsed Logseq block. A block consists of:
+    
+    * A primary content line (can be blank).
+    * Zero or more continuation lines (extra lines of content that are not
+      themselves a new block).
+    * Zero or more properties (key-value pairs).
+    * Zero or more child blocks.
+    """
     
     def __init__(self, indent, content, parent=None):
         
@@ -198,6 +270,12 @@ class Block:
         return content
     
     def add_line(self, content):
+        """
+        Add a new line of content to the block. This may be a simple
+        continuation line, or contain metadata for the block (e.g. properties).
+        
+        :param content: The content line to add.
+        """
         
         content = content.strip()
         
@@ -208,6 +286,23 @@ class Block:
 
 
 class Task(Block):
+    """
+    A parsed Logseq task - a special kind of block that represents a job to
+    be worked on. Tasks are denoted by their content beginning with a keyword
+    such as LATER, and are also expected to contain a task ID and to have work
+    logged against them.
+    
+    Work can be logged either by Logseq's built-in logbook, or manual ``time::``
+    properties (the latter is converted into the former when detected).
+    
+    Tasks are considered invalid if:
+    
+    * Their logbook timer is still running. In order to accurately determine
+      a task's total duration, all work must already be logged.
+    * They are nested within another task. Nested tasks are not supported.
+    * Nothing resembling a task ID exists in the task's content.
+    * No time has been logged, either via the logbook or ``time::`` properties.
+    """
     
     def __init__(self, *args, **kwargs):
         
@@ -257,12 +352,41 @@ class Task(Block):
         return content
     
     def add_to_logbook(self, date, duration):
+        """
+        Add a manual entry to the task's logbook, using the given ``date`` and
+        ``duration``. Insert the entry at the beginning of the logbook, using
+        fake timestamps. The duration is the important part.
+        
+        :param date: The date on which the logbook entry should be made.
+        :param duration: The duration of the logbook entry, in seconds.
+        """
         
         entry = LogbookEntry.from_duration(date, duration)
         
         self.logbook.insert(0, entry)
     
     def validate(self):
+        """
+        Validate the task's content and return a dictionary of errors, if any.
+        
+        The dictionary is keyed on the error type, one of:
+        
+        * ``'keyword'``: Errors that relate to the task keyword, such as the
+          logbook timer still running.
+        * ``'task_id'``: Errors that relate to the task ID, such as one not
+          being found.
+        * ``'duration'``: Errors that relate to the work logged against the
+          task, such as there not being any work logged at all.
+        
+        The dictionary's values are lists of the error messages that apply to
+        each type.
+        
+        The dictionary will only contain keys for error types that actually
+        apply to the task. An empty dictionary indicates no errors were
+        encountered.
+        
+        :return: The errors dictionary.
+        """
         
         errors = {}
         
@@ -298,6 +422,13 @@ class Task(Block):
         return errors
     
     def get_total_duration(self):
+        """
+        Calculate the total duration of work logged against this task,
+        obtained by aggregating the task's logbook. Return the total, rounded
+        to the most appropriate interval using ``round_duration()``.
+        
+        :return: The rounded total duration of work logged to the task.
+        """
         
         total = sum(log.duration for log in self.logbook)
         
@@ -305,6 +436,21 @@ class Task(Block):
 
 
 class Journal(Block):
+    """
+    A parsed Logseq journal for a given date.
+    
+    Journals are much the same as regular blocks, except they don't have a
+    primary content line. Most other features are applicable: continuation
+    lines, properties, child blocks, etc. Journals cannot also be tasks.
+    
+    Journals also have several unique features:
+    
+    * Calculation of the total duration of work logged to the journal's tasks.
+    * Calculation of the total estimated context switching cost of the journal's
+      tasks, based on the number of tasks and a given estimated cost per task.
+    * An optional "catch-all" task, to which the estimated context switching
+      cost can be logged. Only a single catch-all task can exist per journal.
+    """
     
     def __init__(self, date):
         
@@ -317,6 +463,10 @@ class Journal(Block):
     
     @property
     def catch_all_block(self):
+        """
+        A special task block to which the estimated context switching cost
+        can be logged.
+        """
         
         return self._catch_all_block
     
@@ -332,6 +482,9 @@ class Journal(Block):
     
     @property
     def tasks(self):
+        """
+        A list of all tasks present in the journal.
+        """
         
         if self._tasks is None:
             raise Exception('Tasks not collated. Call process_tasks() first.')
@@ -339,6 +492,27 @@ class Journal(Block):
         return self._tasks
     
     def process_tasks(self, switching_cost):
+        """
+        Process the tasks present in the journal, performing several
+        calculations and transformations:
+        
+        * Calculate the total duration of work logged to the journal's tasks.
+        * Calculate the total estimated context switching cost of the journal's
+          tasks, based on the number of tasks and the given ``switching_cost``.
+        * Convert any ``time::`` properties on the tasks into logbook entries.
+        * Validate the tasks and compile a list of any errors encountered.
+        
+        Return a dictionary containing:
+        
+        * ``'tasks'``: A list of all tasks present in the journal.
+        * ``'total_duration'``: The total duration of work logged to those tasks.
+        * ``'total_switching_cost'``: The total estimated context switching cost.
+        * ``'log'``: A list of any errors/warnings encountered during processing.
+        
+        :param switching_cost: The estimated context switching cost per task,
+            in minutes.
+        :return: The dictionary of results.
+        """
         
         log = []
         date = self.date
