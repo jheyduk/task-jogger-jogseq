@@ -16,19 +16,56 @@ class SeqTask(Task):
     
     def handle(self, **options):
         
+        try:
+            self.show_menu(
+                '\nChoose one of the following commands to execute:',
+                'Exit (or Ctrl+C)',
+                ('Log work to Jira', self.log_work)
+            )
+        except Return:
+            # The main menu was used to exit the program
+            self.stdout.write('\nExiting...')
+            raise SystemExit()
+    
+    def show_menu(self, intro, return_option, *other_options):
+        
         while True:
-            try:
-                handler = self.show_main_menu()
-            except Return:
-                # The main menu was used to exit the program
-                self.stdout.write('\nExiting...')
-                raise SystemExit()
+            self.stdout.write(intro, style='label')
+            
+            for i, option in enumerate(other_options, start=1):
+                label = option[0]
+                self.stdout.write(f'{i}. {label}')
+            
+            self.stdout.write(f'0. {return_option}')
+            
+            handler = None
+            args = ()
+            while not handler:
+                try:
+                    selection = input('\nChoose an option: ')
+                except KeyboardInterrupt:
+                    selection = 0
+                
+                try:
+                    selection = int(selection)
+                    if selection == 0:
+                        raise Return()
+                    
+                    selection = other_options[selection - 1]
+                except (ValueError, IndexError):
+                    self.stdout.write('Invalid selection.', style='error')
+                else:
+                    handler = selection[1]
+                    try:
+                        args = selection[2]
+                    except IndexError:  # args are optional
+                        pass
             
             try:
-                handler()
+                handler(*args)
             except Return:
-                # The handler's process was interrupted in order to return to
-                # the main menu
+                # The handler's process was interrupted in order to
+                # return to the menu
                 pass
     
     def get_journal_from_date(self, date):
@@ -71,41 +108,6 @@ class SeqTask(Task):
         
         return cost
     
-    def show_menu(self, return_option, *other_options):
-        
-        for i, option in enumerate(other_options, start=1):
-            label = option[0]
-            self.stdout.write(f'{i}. {label}')
-        
-        self.stdout.write(f'0. {return_option}')
-        
-        handler = None
-        while not handler:
-            try:
-                selection = input('\nChoose an option: ')
-            except KeyboardInterrupt:
-                selection = 0
-            
-            try:
-                selection = int(selection)
-                if selection == 0:
-                    raise Return()
-                
-                handler = other_options[selection - 1][1]
-            except (ValueError, IndexError):
-                self.stdout.write('Invalid selection.', style='error')
-        
-        return handler
-    
-    def show_main_menu(self):
-        
-        self.stdout.write('\nChoose one of the following commands to execute:', style='label')
-        
-        return self.show_menu(
-            'Exit (or Ctrl+C)',
-            ('Log work to Jira', self.log_work),
-        )
-    
     def show_journal_summary(self, journal):
         
         self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
@@ -142,6 +144,12 @@ class SeqTask(Task):
                 prefix = styler(f'[{level.upper()}]')
                 self.stdout.write(f'{prefix} {msg}')
     
+    def reparse_journal(self, journal):
+        
+        print('reparse:', id(journal))
+        
+        self.show_journal_summary(journal)
+    
     def log_work(self):
         
         self.stdout.write('\nChoose which day to log work for. Defaults to today.', style='label')
@@ -172,19 +180,19 @@ class SeqTask(Task):
         
         self.show_journal_summary(journal)
         
-        self.stdout.write('\nJournal options:', style='label')
-        
-        handler = self.show_menu(
+        handler_args = (journal, )
+        self.show_menu(
+            '\nJournal options:',
             'Return to main menu',
             
             # TODO: Show summary and return to this menu
-            ('Show worklog summary', lambda: print('"worklog summary"')),
+            ('Show worklog summary', lambda j: print(f'"worklog summary" for {id(j)}'), handler_args),
             
             # TODO: Submit via API and show prompt to mark all tasks as done
             ('Submit worklog', lambda: print('submitted!')),
             
             # TODO: Mark all tasks as done and show prompt "hit ENTER to return to main menu"
             ('Mark all tasks as done', lambda: print('all done!')),
+            
+            ('Re-parse journal', self.reparse_journal, handler_args)
         )
-        
-        handler()
