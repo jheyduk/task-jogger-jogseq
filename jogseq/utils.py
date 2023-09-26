@@ -7,60 +7,6 @@ from .exceptions import ParseError
 TASK_ID_RE = re.compile(r'^([A-Z]+-\d+):?$')
 
 
-def parse_journal(graph_path, date):
-    """
-    Given a base graph path and a date, locate and parse the markdown file for
-    the date's journal entry. Return a ``Journal`` instance representing the
-    parsed journal.
-    
-    :param graph_path: The path to the directory containing the Logseq graph.
-    :param date: The date of the journal to locate and parse, as a ``date`` instance.
-    :return: A ``Journal`` instance for the given date.
-    """
-    
-    journal_path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
-    
-    journal = Journal(date)
-    current_block = journal
-    
-    with open(journal_path, 'r') as f:
-        for line in f.readlines():
-            indent = line.count('\t')
-            content = line.strip()
-            
-            if not content.startswith('-'):
-                # The line is a continuation of the current block
-                current_block.add_line(content)
-                continue
-            
-            block_cls = Block
-            if content.startswith('- NOW ') or content.startswith('- LATER '):
-                block_cls = Task
-            
-            if indent > current_block.indent:
-                # The line is a child block of the current block
-                parent_block = current_block
-            elif indent == current_block.indent:
-                # The line is a sibling block of the current block
-                parent_block = current_block.parent
-            else:
-                # The line is a new block at a higher level than the
-                # current block. Step back through the current block's
-                # parents to the appropriate level and add a new child
-                # block there.
-                while indent <= current_block.indent:
-                    current_block = current_block.parent
-                
-                parent_block = current_block
-            
-            current_block = block_cls(indent, content, parent_block)
-            
-            if '[CATCH-ALL]' in current_block.content:
-                journal.catch_all_block = current_block
-    
-    return journal
-
-
 def parse_duration_timestamp(timestamp_str):
     """
     Return the number of seconds represented by the given duration timestamp
@@ -443,20 +389,24 @@ class Journal(Block):
     primary content line. Most other features are applicable: continuation
     lines, properties, child blocks, etc. Journals cannot also be tasks.
     
-    Journals also have several unique features:
+    Journals are responsible for parsing their own markdown file, and for
+    collating and processing the tasks contained within. This processing
+    includes:
     
-    * Calculation of the total duration of work logged to the journal's tasks.
-    * Calculation of the total estimated context switching cost of the journal's
+    * Calculating the total duration of work logged to the journal's tasks.
+    * Calculating the total estimated context switching cost of the journal's
       tasks, based on the number of tasks and a given estimated cost per task.
-    * An optional "catch-all" task, to which the estimated context switching
-      cost can be logged. Only a single catch-all task can exist per journal.
+    * Tracking an optional "catch-all" task, to which the estimated context
+      switching cost can be logged. Only a single catch-all task can exist per
+      journal.
     """
     
-    def __init__(self, date):
+    def __init__(self, graph_path, date):
         
         super().__init__(indent=-1, content='', parent=None)
         
         self.date = date
+        self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
         
         self._catch_all_block = None
         self._tasks = None
@@ -490,6 +440,57 @@ class Journal(Block):
             raise Exception('Tasks not collated. Call process_tasks() first.')
         
         return self._tasks
+    
+    def parse(self):
+        """
+        Using the journal's configured base graph path and date, locate and
+        parse the markdown file for the matching Logseq journal entry. Parsing
+        this file populates the journal's attributes with the parsed data.
+        """
+        
+        # In the event of re-parsing the journal, reset all relevant attributes
+        self.properties = {}
+        self.extra_lines = []
+        self.children = []
+        self._catch_all_block = None
+        self._tasks = None
+        
+        current_block = self
+        
+        with open(self.path, 'r') as f:
+            for line in f.readlines():
+                indent = line.count('\t')
+                content = line.strip()
+                
+                if not content.startswith('-'):
+                    # The line is a continuation of the current block
+                    current_block.add_line(content)
+                    continue
+                
+                block_cls = Block
+                if content.startswith('- NOW ') or content.startswith('- LATER '):
+                    block_cls = Task
+                
+                if indent > current_block.indent:
+                    # The line is a child block of the current block
+                    parent_block = current_block
+                elif indent == current_block.indent:
+                    # The line is a sibling block of the current block
+                    parent_block = current_block.parent
+                else:
+                    # The line is a new block at a higher level than the
+                    # current block. Step back through the current block's
+                    # parents to the appropriate level and add a new child
+                    # block there.
+                    while indent <= current_block.indent:
+                        current_block = current_block.parent
+                    
+                    parent_block = current_block
+                
+                current_block = block_cls(indent, content, parent_block)
+                
+                if '[CATCH-ALL]' in current_block.content:
+                    self.catch_all_block = current_block
     
     def process_tasks(self, switching_cost):
         """

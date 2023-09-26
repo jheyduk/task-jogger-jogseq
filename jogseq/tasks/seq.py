@@ -4,7 +4,7 @@ from os import path
 from jogger.tasks import Task
 
 from ..exceptions import ParseError, Return
-from ..utils import format_duration, parse_journal
+from ..utils import Journal, format_duration
 
 
 class SeqTask(Task):
@@ -15,6 +15,16 @@ class SeqTask(Task):
     )
     
     def handle(self, **options):
+        
+        try:
+            graph_path = self.settings['graph_path']
+        except KeyError:
+            self.stderr.write('Invalid config: No graph path configured.')
+            raise SystemExit(1)
+        
+        if not path.exists(graph_path):
+            self.stderr.write('Invalid config: Graph path does not exist.')
+            raise SystemExit(1)
         
         try:
             self.show_menu(
@@ -68,27 +78,25 @@ class SeqTask(Task):
                 # return to the menu
                 pass
     
-    def get_journal_from_date(self, date):
+    def parse_journal(self, journal=None, date=None, show_summary=True):
+        
+        if not journal and not date:
+            raise TypeError('One of "journal" or "date" must be provided.')
+        
+        if not journal:
+            journal = Journal(self.settings['graph_path'], date)
         
         try:
-            graph_path = self.settings['graph_path']
-        except KeyError:
-            self.stderr.write('Invalid config: No graph path configured.')
-            raise SystemExit(1)
-        
-        if not path.exists(graph_path):
-            self.stderr.write('Invalid config: Graph path does not exist.')
-            raise SystemExit(1)
-        
-        journal = None
-        
-        try:
-            journal = parse_journal(graph_path, date)
+            journal.parse()
         except FileNotFoundError:
-            self.stdout.write(f'No journal found for {date}', style='error')
+            self.stdout.write(f'No journal found for {journal.date}', style='error')
+            return None
         except ParseError as e:
-            self.stdout.write(f'Error parsing journal for {date}: {e}', style='error')
+            self.stdout.write(f'Error parsing journal for {journal.date}: {e}', style='error')
             raise Return()
+        
+        if show_summary:
+            self.show_journal_summary(journal)
         
         return journal
     
@@ -144,12 +152,6 @@ class SeqTask(Task):
                 prefix = styler(f'[{level.upper()}]')
                 self.stdout.write(f'{prefix} {msg}')
     
-    def reparse_journal(self, journal):
-        
-        print('reparse:', id(journal))
-        
-        self.show_journal_summary(journal)
-    
     def log_work(self):
         
         self.stdout.write('\nChoose which day to log work for. Defaults to today.', style='label')
@@ -176,9 +178,7 @@ class SeqTask(Task):
             
             date = datetime.date.today() - datetime.timedelta(days=offset)
             
-            journal = self.get_journal_from_date(date)
-        
-        self.show_journal_summary(journal)
+            journal = self.parse_journal(date=date)
         
         handler_args = (journal, )
         self.show_menu(
@@ -194,5 +194,5 @@ class SeqTask(Task):
             # TODO: Mark all tasks as done and show prompt "hit ENTER to return to main menu"
             ('Mark all tasks as done', lambda: print('all done!')),
             
-            ('Re-parse journal', self.reparse_journal, handler_args)
+            ('Re-parse journal', self.parse_journal, handler_args)
         )
