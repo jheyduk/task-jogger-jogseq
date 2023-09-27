@@ -102,8 +102,13 @@ def format_duration(total_seconds):
         parts.append(f'{hours}h')
     if minutes > 0:
         parts.append(f'{minutes}m')
-    if seconds > 0 or not parts:
+    if seconds > 0:
         parts.append(f'{seconds}s')
+    
+    if not parts:
+        # The most common unit is minutes, so for durations of sero, report
+        # it as 0 minutes.
+        return '0m'
     
     return ' '.join(parts)
 
@@ -492,7 +497,7 @@ class Journal(Block):
                 if '[CATCH-ALL]' in current_block.content:
                     self.catch_all_block = current_block
     
-    def process_tasks(self, switching_cost):
+    def process_tasks(self, target_duration, switching_cost):
         """
         Process the tasks present in the journal, performing several
         calculations and transformations:
@@ -522,7 +527,7 @@ class Journal(Block):
         num_tasks = len(all_tasks)
         
         # Calculate and log context switching cost (in seconds)
-        total_switching_cost = round_duration((num_tasks * switching_cost) * 60)
+        total_switching_cost = round_duration(num_tasks * switching_cost)
         catch_all_block = self.catch_all_block
         if catch_all_block:
             catch_all_block.add_to_logbook(date, total_switching_cost)
@@ -560,12 +565,14 @@ class Journal(Block):
                 for msg in messages:
                     log.append(('error', f'{msg} for line "{task.content}"'))
         
-        # Calculate the total duration
+        # Calculate the total duration and resulting slack time
         total_duration = sum(t.get_total_duration() for t in all_tasks)
+        slack_time = max(target_duration - total_duration, 0)
         
         return {
             'tasks': all_tasks,
             'total_duration': total_duration,
             'total_switching_cost': total_switching_cost,
+            'slack_time': slack_time,
             'log': log
         }

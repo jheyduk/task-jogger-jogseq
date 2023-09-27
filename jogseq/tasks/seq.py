@@ -9,6 +9,9 @@ from ..utils import Journal, format_duration
 
 class SeqTask(Task):
     
+    DEFAULT_SWITCHING_COST = 0
+    DEFAULT_TARGET_DURATION = 8 * 60  # 8 hours
+    
     help = (
         'Begin the Logseq/Jira interactive integration program. This program '
         'provides several commands for synchronising Logseq and Jira.'
@@ -100,12 +103,28 @@ class SeqTask(Task):
         
         return journal
     
+    def get_target_duration(self):
+        
+        error = 'Invalid config: Target duration must be a positive integer.'
+        
+        try:
+            duration = int(self.settings.get('target_duration', self.DEFAULT_TARGET_DURATION))
+        except ValueError:
+            self.stderr.write(error)
+            raise SystemExit(1)
+        
+        if duration < 0:
+            self.stderr.write(error)
+            raise SystemExit(1)
+        
+        return duration * 60  # convert from minutes to seconds
+    
     def get_switching_cost(self):
         
         error = 'Invalid config: Switching cost must be a positive integer.'
         
         try:
-            cost = int(self.settings.get('switching_cost', 0))
+            cost = int(self.settings.get('switching_cost', self.DEFAULT_SWITCHING_COST))
         except ValueError:
             self.stderr.write(error)
             raise SystemExit(1)
@@ -114,14 +133,15 @@ class SeqTask(Task):
             self.stderr.write(error)
             raise SystemExit(1)
         
-        return cost
+        return cost * 60  # convert from minutes to seconds
     
     def show_journal_summary(self, journal):
         
         self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
         
+        target_duration = self.get_target_duration()
         switching_cost = self.get_switching_cost()
-        result = journal.process_tasks(switching_cost)
+        result = journal.process_tasks(target_duration, switching_cost)
         
         num_tasks = self.styler.label(len(result['tasks']))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
@@ -136,6 +156,9 @@ class SeqTask(Task):
         
         total_duration_str = self.styler.label(format_duration(result['total_duration']))
         self.stdout.write(f'Total duration (rounded): {total_duration_str} {cost_inclusion_str}')
+        
+        slack_time_str = self.styler.label(format_duration(result['slack_time']))
+        self.stdout.write(f'Slack time: {slack_time_str}')
         
         log = result['log']
         if log:
