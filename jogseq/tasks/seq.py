@@ -7,6 +7,31 @@ from ..exceptions import ParseError, Return
 from ..utils import Journal, format_duration
 
 
+class Menu(dict):
+    
+    def __init__(self, options):
+        
+        super().__init__()
+        
+        for i, option in enumerate(options, start=1):
+            self[i] = {
+                'handler': option[1]
+            }
+            
+            try:
+                self[i]['args'] = option[2]
+            except IndexError:  # args are optional
+                pass
+    
+    def __getitem__(self, key):
+        
+        # The 0 option is always "return to the previous menu"
+        if key == 0:
+            raise Return()
+        
+        return super().__getitem__(key)
+
+
 class SeqTask(Task):
     
     DEFAULT_SWITCHING_COST = 0
@@ -42,6 +67,8 @@ class SeqTask(Task):
     
     def show_menu(self, intro, return_option, *other_options):
         
+        menu = Menu(other_options)
+        
         while True:
             self.stdout.write(intro, style='label')
             
@@ -51,29 +78,20 @@ class SeqTask(Task):
             
             self.stdout.write(f'0. {return_option}')
             
-            handler = None
-            args = ()
-            while not handler:
+            selected_option = None
+            while not selected_option:
                 try:
                     selection = input('\nChoose an option: ')
                 except KeyboardInterrupt:
                     selection = 0
                 
                 try:
-                    selection = int(selection)
-                    if selection == 0:
-                        raise Return()
-                    
-                    selection = other_options[selection - 1]
+                    selected_option = menu[int(selection)]
                 except (ValueError, IndexError):
                     self.stdout.write('Invalid selection.', style='error')
-                else:
-                    handler = selection[1]
-                    try:
-                        args = selection[2]
-                    except IndexError:  # args are optional
-                        pass
             
+            handler = selected_option['handler']
+            args = selected_option.get('args', ())
             try:
                 handler(*args)
             except Return:
