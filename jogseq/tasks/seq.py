@@ -8,6 +8,32 @@ from ..utils import Journal, format_duration
 
 
 class Menu(dict):
+    """
+    Dictionary subclass that is instantiated, not with key-value pairs, but
+    with an iterable of menu options. Each option is either a two- or three-
+    tuple:
+        
+        (label, handler)
+        OR
+        (label, handler, args)
+    
+    Where the values are:
+    
+    - label: The label to display for the option
+    - handler: The function to call when the option is selected
+    - args: A tuple of arguments to pass to the handler function
+    
+    This `options` iterable is used to populate the dictionary, with the
+    keys being integers starting from 1, and the values being dictionaries
+    themselves, with the following keys:
+    
+    - handler: The handler function
+    - args: The arguments to pass to the handler function. Only present if the
+        three-tuple form of the option was used.
+    
+    The 0 key is reserved for the "return to previous menu" option. Accessing
+    this key will raise a `Return` exception.
+    """
     
     def __init__(self, options):
         
@@ -58,7 +84,7 @@ class SeqTask(Task):
             self.show_menu(
                 '\nChoose one of the following commands to execute:',
                 'Exit (or Ctrl+C)',
-                ('Log work to Jira', self.log_work)
+                ('Log work to Jira', self.handle_log_work)
             )
         except Return:
             # The main menu was used to exit the program
@@ -66,6 +92,30 @@ class SeqTask(Task):
             raise SystemExit()
     
     def show_menu(self, intro, return_option, *other_options):
+        """
+        Recursively display a menu using the given arguments until a valid
+        option is selected. Call the handler associated with the selected
+        option and handle it raising a `Return` exception to return to the
+        menu. Raise a `Return` exception outside a selected handler to return
+        to the *previous* menu.
+        
+        :param intro: The message to display before the menu options.
+        :param return_option: The label for the option to return to the
+            previous menu. Always displayed as the last menu item, with
+            an option number of 0.
+        :param other_options: An iterable of other options to display in the
+            menu. Each option is either a two- or three-tuple:
+                    
+                    (label, handler)
+                    OR
+                    (label, handler, args)
+                
+                Where the values are:
+                
+                - label: The label to display for the option
+                - handler: The function to call when the option is selected
+                - args: A tuple of arguments to pass to the handler function
+        """
         
         menu = Menu(other_options)
         
@@ -100,6 +150,20 @@ class SeqTask(Task):
                 pass
     
     def parse_journal(self, journal=None, date=None, show_summary=True):
+        """
+        Parse a Logseq journal file and return a `Journal` object. Can either
+        re-parse a file represented by an existing `Journal` object, or parse
+        a new file given its date.
+        
+        Either way, upon successfully parsing the file, a brief summary of its
+        contents is displayed. This can be disabled by passing `show_summary`
+        as `False`.
+        
+        :param journal: Optional. An existing `Journal` object to re-parse.
+        :param date: Optional. The date of a new journal file to parse.
+        :param show_summary: Whether to show a summary of the journal's
+            contents after parsing it.
+        """
         
         if not journal and not date:
             raise TypeError('One of "journal" or "date" must be provided.')
@@ -122,6 +186,9 @@ class SeqTask(Task):
         return journal
     
     def get_target_duration(self):
+        """
+        Return the configured target duration in seconds.
+        """
         
         error = 'Invalid config: Target duration must be a positive integer.'
         
@@ -138,6 +205,9 @@ class SeqTask(Task):
         return duration * 60  # convert from minutes to seconds
     
     def get_switching_cost(self):
+        """
+        Return the configured switching cost in seconds.
+        """
         
         error = 'Invalid config: Switching cost must be a positive integer.'
         
@@ -154,6 +224,10 @@ class SeqTask(Task):
         return cost * 60  # convert from minutes to seconds
     
     def show_journal_summary(self, journal):
+        """
+        Display a summary of the given `Journal` object's contents, including
+        any problems detected while parsing it.
+        """
         
         self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
         
@@ -193,7 +267,11 @@ class SeqTask(Task):
                 prefix = styler(f'[{level.upper()}]')
                 self.stdout.write(f'{prefix} {msg}')
     
-    def log_work(self):
+    #
+    # Menu option handlers
+    #
+    
+    def handle_log_work(self):
         
         self.stdout.write('\nChoose which day to log work for. Defaults to today.', style='label')
         self.stdout.write(
