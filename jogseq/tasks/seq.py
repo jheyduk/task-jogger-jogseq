@@ -235,7 +235,7 @@ class SeqTask(Task):
         switching_cost = self.get_switching_cost()
         result = journal.process_tasks(target_duration, switching_cost)
         
-        num_tasks = self.styler.label(len(result['tasks']))
+        num_tasks = self.styler.label(len(journal.tasks))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
         
         switching_cost_str = self.styler.label(format_duration(result['total_switching_cost']))
@@ -252,11 +252,11 @@ class SeqTask(Task):
         slack_time_str = self.styler.label(format_duration(result['slack_time']))
         self.stdout.write(f'Slack time: {slack_time_str}')
         
-        log = result['log']
-        if log:
+        problems = journal.problems
+        if problems:
             self.stdout.write('')  # blank line
             
-            for level, msg in log:
+            for level, msg in problems:
                 if level == 'error':
                     styler = self.styler.error
                 elif level == 'warning':

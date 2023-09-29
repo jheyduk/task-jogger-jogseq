@@ -414,6 +414,7 @@ class Journal(Block):
         self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
         
         self._catch_all_block = None
+        self._problems = None
         self._tasks = None
     
     @property
@@ -434,6 +435,19 @@ class Journal(Block):
             raise ParseError('Only a single CATCH-ALL block is supported per journal.')
         
         self._catch_all_block = block
+    
+    @property
+    def problems(self):
+        """
+        A list of problems present in the journal. Each item in the list is
+        a two-tuple of the form ``(type, message)``, where ``type`` is one of
+        ``'error'`` or ``'warning'``.
+        """
+        
+        if self._problems is None:
+            raise Exception('Problems not collated. Call process_tasks() first.')
+        
+        return self._problems
     
     @property
     def tasks(self):
@@ -510,19 +524,17 @@ class Journal(Block):
         
         Return a dictionary containing:
         
-        * ``'tasks'``: A list of all tasks present in the journal.
         * ``'total_duration'``: The total duration of work logged to those tasks.
         * ``'total_switching_cost'``: The total estimated context switching cost.
-        * ``'log'``: A list of any errors/warnings encountered during processing.
         
         :param switching_cost: The estimated context switching cost per task,
             in minutes.
         :return: The dictionary of results.
         """
         
-        log = []
         date = self.date
         
+        problems = self._problems = []
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
         
@@ -532,7 +544,7 @@ class Journal(Block):
         if catch_all_block:
             catch_all_block.add_to_logbook(date, total_switching_cost)
         elif total_switching_cost > 0:
-            log.append(('warning', (
+            problems.append(('warning', (
                 'No CATCH-ALL task found to log context switching cost against. '
                 'Not included in total duration.'
             )))
@@ -563,16 +575,14 @@ class Journal(Block):
             errors = task.validate()
             for messages in errors.values():
                 for msg in messages:
-                    log.append(('error', f'{msg} for line "{task.content}"'))
+                    problems.append(('error', f'{msg} for line "{task.content}"'))
         
         # Calculate the total duration and resulting slack time
         total_duration = sum(t.get_total_duration() for t in all_tasks)
         slack_time = max(target_duration - total_duration, 0)
         
         return {
-            'tasks': all_tasks,
             'total_duration': total_duration,
             'total_switching_cost': total_switching_cost,
-            'slack_time': slack_time,
-            'log': log
+            'slack_time': slack_time
         }
