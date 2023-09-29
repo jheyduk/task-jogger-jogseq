@@ -4,7 +4,7 @@ from os import path
 from jogger.tasks import Task
 
 from ..exceptions import ParseError, Return
-from ..utils import Journal, format_duration
+from ..utils import Journal
 
 
 class Menu(dict):
@@ -233,12 +233,12 @@ class SeqTask(Task):
         
         target_duration = self.get_target_duration()
         switching_cost = self.get_switching_cost()
-        result = journal.process_tasks(target_duration, switching_cost)
+        journal.process_tasks(target_duration, switching_cost)
         
         num_tasks = self.styler.label(len(journal.tasks))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
         
-        switching_cost_str = self.styler.label(format_duration(result['total_switching_cost']))
+        switching_cost_str = self.styler.label(journal.properties['switching-cost'])
         self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
         
         if journal.catch_all_block:
@@ -246,10 +246,15 @@ class SeqTask(Task):
         else:
             cost_inclusion_str = self.styler.error('(not including switching cost)')
         
-        total_duration_str = self.styler.label(format_duration(result['total_duration']))
+        total_duration_str = self.styler.label(journal.properties['total-duration'])
         self.stdout.write(f'Total duration (rounded): {total_duration_str} {cost_inclusion_str}')
         
-        slack_time_str = self.styler.label(format_duration(result['slack_time']))
+        slack_time = journal.properties['slack-time']
+        if slack_time == '0m':
+            slack_time_str = self.styler.label('None! You work too hard.')
+        else:
+            slack_time_str = self.styler.warning(slack_time)
+        
         self.stdout.write(f'Slack time: {slack_time_str}')
         
         problems = journal.problems

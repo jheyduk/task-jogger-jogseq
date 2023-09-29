@@ -519,17 +519,16 @@ class Journal(Block):
         * Calculate the total duration of work logged to the journal's tasks.
         * Calculate the total estimated context switching cost of the journal's
           tasks, based on the number of tasks and the given ``switching_cost``.
+        * Calculate the "slack time": the difference between the given target
+            duration and the total duration of work logged to the journal's
+            tasks.
         * Convert any ``time::`` properties on the tasks into logbook entries.
         * Validate the tasks and compile a list of any errors encountered.
         
-        Return a dictionary containing:
-        
-        * ``'total_duration'``: The total duration of work logged to those tasks.
-        * ``'total_switching_cost'``: The total estimated context switching cost.
-        
+        :param target_duration: The target duration for tasks in the journal,
+            in seconds.
         :param switching_cost: The estimated context switching cost per task,
-            in minutes.
-        :return: The dictionary of results.
+            in seconds.
         """
         
         date = self.date
@@ -538,7 +537,9 @@ class Journal(Block):
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
         
-        # Calculate and log context switching cost (in seconds)
+        # Calculate and log context switching cost (in seconds). Add it to
+        # the catch-all task's logbook, if any, so it can be allocated to a
+        # relevant task.
         total_switching_cost = round_duration(num_tasks * switching_cost)
         catch_all_block = self.catch_all_block
         if catch_all_block:
@@ -549,9 +550,12 @@ class Journal(Block):
                 'Not included in total duration.'
             )))
         
-        # Check tasks for a time:: property and convert it to a logbook entry
-        # if found
+        # Also add a formatted version of the switching cost as a journal
+        # property for future reference.
+        self.properties['switching-cost'] = format_duration(total_switching_cost)
+        
         for task in all_tasks:
+            # Convert any time:: properties to logbook entries
             if 'time' in task.properties:
                 time_value = task.properties['time']
                 
@@ -572,6 +576,8 @@ class Journal(Block):
                     
                     task.add_to_logbook(date, time_value)
             
+            # Add any errors with the task definition to the journal's overall
+            # list of problems
             errors = task.validate()
             for messages in errors.values():
                 for msg in messages:
@@ -581,8 +587,7 @@ class Journal(Block):
         total_duration = sum(t.get_total_duration() for t in all_tasks)
         slack_time = max(target_duration - total_duration, 0)
         
-        return {
-            'total_duration': total_duration,
-            'total_switching_cost': total_switching_cost,
-            'slack_time': slack_time
-        }
+        # Add formatted versions of the total duration and slack time as
+        # journal properties for future reference.
+        self.properties['total-duration'] = format_duration(total_duration)
+        self.properties['slack-time'] = format_duration(slack_time)
