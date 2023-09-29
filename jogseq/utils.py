@@ -460,11 +460,14 @@ class Journal(Block):
         
         return self._tasks
     
-    def parse(self):
+    def parse(self, switching_cost):
         """
         Using the journal's configured base graph path and date, locate and
         parse the markdown file for the matching Logseq journal entry. Parsing
         this file populates the journal's attributes with the parsed data.
+        
+        :param switching_cost: The estimated context switching cost per task,
+            in seconds.
         """
         
         # In the event of re-parsing the journal, reset all relevant attributes
@@ -472,6 +475,7 @@ class Journal(Block):
         self.extra_lines = []
         self.children = []
         self._catch_all_block = None
+        self._problems = None
         self._tasks = None
         
         current_block = self
@@ -510,8 +514,10 @@ class Journal(Block):
                 
                 if '[CATCH-ALL]' in current_block.content:
                     self.catch_all_block = current_block
+        
+        self._process_tasks(switching_cost)
     
-    def process_tasks(self, target_duration, switching_cost):
+    def _process_tasks(self, switching_cost):
         """
         Process the tasks present in the journal, performing several
         calculations and transformations:
@@ -519,14 +525,9 @@ class Journal(Block):
         * Calculate the total duration of work logged to the journal's tasks.
         * Calculate the total estimated context switching cost of the journal's
           tasks, based on the number of tasks and the given ``switching_cost``.
-        * Calculate the "slack time": the difference between the given target
-            duration and the total duration of work logged to the journal's
-            tasks.
         * Convert any ``time::`` properties on the tasks into logbook entries.
         * Validate the tasks and compile a list of any errors encountered.
         
-        :param target_duration: The target duration for tasks in the journal,
-            in seconds.
         :param switching_cost: The estimated context switching cost per task,
             in seconds.
         """
@@ -583,11 +584,7 @@ class Journal(Block):
                 for msg in messages:
                     problems.append(('error', f'{msg} for line "{task.content}"'))
         
-        # Calculate the total duration and resulting slack time
+        # Calculate the total duration and add a formatted version to the
+        # journal's properties for future reference
         total_duration = sum(t.get_total_duration() for t in all_tasks)
-        slack_time = max(target_duration - total_duration, 0)
-        
-        # Add formatted versions of the total duration and slack time as
-        # journal properties for future reference.
         self.properties['total-duration'] = format_duration(total_duration)
-        self.properties['slack-time'] = format_duration(slack_time)

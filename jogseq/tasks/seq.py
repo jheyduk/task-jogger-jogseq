@@ -4,7 +4,7 @@ from os import path
 from jogger.tasks import Task
 
 from ..exceptions import ParseError, Return
-from ..utils import Journal
+from ..utils import Journal, format_duration, parse_duration_input
 
 
 class Menu(dict):
@@ -171,8 +171,10 @@ class SeqTask(Task):
         if not journal:
             journal = Journal(self.settings['graph_path'], date)
         
+        switching_cost = self.get_switching_cost()
+        
         try:
-            journal.parse()
+            journal.parse(switching_cost)
         except FileNotFoundError:
             self.stdout.write(f'No journal found for {journal.date}', style='error')
             return None
@@ -231,10 +233,6 @@ class SeqTask(Task):
         
         self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
         
-        target_duration = self.get_target_duration()
-        switching_cost = self.get_switching_cost()
-        journal.process_tasks(target_duration, switching_cost)
-        
         num_tasks = self.styler.label(len(journal.tasks))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
         
@@ -246,14 +244,18 @@ class SeqTask(Task):
         else:
             cost_inclusion_str = self.styler.error('(not including switching cost)')
         
-        total_duration_str = self.styler.label(journal.properties['total-duration'])
+        total_duration = journal.properties['total-duration']
+        total_duration_str = self.styler.label(total_duration)
         self.stdout.write(f'Total duration (rounded): {total_duration_str} {cost_inclusion_str}')
         
-        slack_time = journal.properties['slack-time']
-        if slack_time == '0m':
-            slack_time_str = self.styler.label('None! You work too hard.')
+        # Calculate the "slack time" based on the target duration and the
+        # total duration of all tasks
+        target_duration = self.get_target_duration()
+        slack_time = max(target_duration - parse_duration_input(total_duration), 0)
+        if slack_time > 0:
+            slack_time_str = self.styler.warning(format_duration(slack_time))
         else:
-            slack_time_str = self.styler.warning(slack_time)
+            slack_time_str = self.styler.label('None! You work too hard.')
         
         self.stdout.write(f'Slack time: {slack_time_str}')
         
