@@ -387,9 +387,19 @@ class Task(Block):
     @property
     def sanitised_content(self):
         
-        # The sanitised version of a Task's content is just the
-        # description portion, not the whole line
-        return sanitise(self.description)
+        # The sanitised version of a Task's content is just the description
+        # portion, not the whole line. If the task doesn't have a description,
+        # use its parent's sanitised content instead.
+        # TODO: Move this functionality behind a setting?
+        description = self.description
+        if not description:
+            description = self.parent.sanitised_content
+            
+            # Strip trailing colons from a parent description, as they are
+            # often used in parent blocks listing multiple related tasks
+            return description.rstrip(':')
+        
+        return sanitise(description)
     
     def _process_new_line(self, content):
         
