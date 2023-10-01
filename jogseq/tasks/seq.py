@@ -149,6 +149,28 @@ class SeqTask(Task):
                 # return to the menu
                 pass
     
+    def show_confirmation_prompt(self, prompt):
+        """
+        Display a yes/no confirmation prompt and raise ``Return`` if the user
+        does not confirm the action. Any input other than "y" and "Y" is
+        considered a "no".
+        
+        ``prompt`` does not need to end with a question mark, as one will be
+        added automatically. Details on how to answer the prompt will also be
+        included automatically (i.e. "[Y/n]").
+        
+        :param prompt: The prompt to display.
+        """
+        
+        try:
+            answer = input(f'{prompt} [Y/n]? ')
+        except KeyboardInterrupt:
+            answer = None  # no
+        
+        if answer.lower() != 'y':
+            self.stdout.write('No action taken.')
+            raise Return()
+    
     def parse_journal(self, journal=None, date=None, show_summary=True):
         """
         Parse a Logseq journal file and return a `Journal` object. Can either
@@ -307,15 +329,66 @@ class SeqTask(Task):
         self.show_menu(
             '\nJournal options:',
             'Return to main menu',
-            
-            # TODO: Show summary and return to this menu
-            ('Show worklog summary', lambda j: print(f'"worklog summary" for {id(j)}'), handler_args),
-            
-            # TODO: Submit via API and show prompt to mark all tasks as done
-            ('Submit worklog', lambda: print('submitted!')),
-            
-            # TODO: Mark all tasks as done and show prompt "hit ENTER to return to main menu"
-            ('Mark all tasks as done', lambda: print('all done!')),
-            
+            ('Show worklog summary', self.handle_log_work__show_worklog, handler_args),
+            ('[unimplemented] Submit worklog', self.handle_log_work__submit_worklog, handler_args),
+            ('[unimplemented] Update journal', self.handle_log_work__update_journal, handler_args),
             ('Re-parse journal', self.parse_journal, handler_args)
         )
+    
+    def handle_log_work__show_worklog(self, journal):
+        
+        self.stdout.write('\nWorklog summary:', style='label')
+        
+        for task in journal.tasks:
+            # TODO: Show extra lines/children, highlight errors
+            self.stdout.write(f'{task.task_id}: {task.get_total_duration()}; {task.description}')
+    
+    def handle_log_work__submit_worklog(self, journal):
+        
+        self.stdout.write(
+            '\nIf you continue, the tasks in this journal will be submitted to'
+            ' Jira as worklog entries. The journal file will then be updated to'
+            ' reflect any processing performed by this program, flag the tasks'
+            ' as done, and note the details of the submission.'
+        )
+        
+        self.show_confirmation_prompt('Are you sure you wish to continue')
+        
+        if journal.problems:
+            self.stdout.write(
+                '\nProblems were found parsing this journal. Continuing may'
+                ' result in incorrect or incomplete worklog entries being'
+                ' submitted to Jira. It may even result in data loss when'
+                ' updating the journal file.'
+            )
+            
+            self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
+        
+        # TODO: Submit via API and update journal
+        self.stdout.write('Not implemented.', style='error')
+    
+    def handle_log_work__update_journal(self, journal):
+        
+        self.stdout.write(
+            '\nIf you continue, the source Logseq file for this journal will'
+            ' be updated to reflect any processing performed by this program'
+            ' (e.g. converting time:: properties), and to note calculated'
+            ' totals (e.g. total duration and estimated switching cost).'
+        )
+        
+        self.show_confirmation_prompt('Are you sure you wish to continue')
+        
+        if journal.problems:
+            self.stdout.write(
+                '\nProblems were found parsing this journal. Continuing may'
+                ' result in data loss when updating the journal file.'
+            )
+            
+            self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
+        
+        # TODO: Optionally mark all tasks as done (prompt user, allow skipping
+        #   if coming directly from submitting via API, which should automatically
+        #   flag as done)
+        # TODO: Write journal file back
+        # TODO: Show prompt "hit ENTER to return to main menu"
+        self.stdout.write('Not implemented.', style='error')
