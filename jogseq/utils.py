@@ -2,8 +2,6 @@ import datetime
 import os
 import re
 
-from .exceptions import ParseError
-
 TASK_ID_RE = re.compile(r'^([A-Z]+-\d+):?$')
 
 
@@ -130,6 +128,14 @@ def find_tasks(block):
         tasks.extend(find_tasks(child))
     
     return tasks
+
+
+class ParseError(Exception):
+    """
+    Raised when an unresolvable issue is encountered when parsing a journal.
+    """
+    
+    pass
 
 
 class LogbookEntry:

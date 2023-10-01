@@ -3,8 +3,16 @@ from os import path
 
 from jogger.tasks import Task
 
-from ..exceptions import Return
 from ..utils import Journal, format_duration, parse_duration_input
+
+
+class Return(Exception):
+    """
+    Raised to trigger a return to the previous menu, or (if there is no
+    previous menu) to exit the program.
+    """
+    
+    pass
 
 
 class Menu(dict):
