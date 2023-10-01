@@ -213,7 +213,10 @@ class Block:
             key, value = content.split('::', 1)
             
             if key in self.properties:
-                raise ParseError(f'Duplicate property "{key}" for block "{self.content}".')
+                raise ParseError(
+                    f'Duplicate property "{key}" for block "{self.content}". '
+                    f'Only the first "{key}" property will be retained.'
+                )
             
             self.properties[key] = value.strip()
             return None
@@ -429,10 +432,17 @@ class Journal(Block):
     @catch_all_block.setter
     def catch_all_block(self, block):
         
+        problems = self._problems
+        if problems is None:
+            raise Exception('Journal not parsed.')
+        
         if self._catch_all_block and self._catch_all_block is not block:
             # The journal already has a catch-all task registered, and it is
             # different to the one given
-            raise ParseError('Only a single CATCH-ALL block is supported per journal.')
+            problems.append(('warning', (
+                'Only a single CATCH-ALL block is supported per journal. '
+                'Subsequent CATCH-ALL blocks have no effect.'
+            )))
         
         self._catch_all_block = block
     
@@ -445,7 +455,7 @@ class Journal(Block):
         """
         
         if self._problems is None:
-            raise Exception('Problems not collated. Call process_tasks() first.')
+            raise Exception('Journal not parsed.')
         
         return self._problems
     
@@ -456,7 +466,7 @@ class Journal(Block):
         """
         
         if self._tasks is None:
-            raise Exception('Tasks not collated. Call process_tasks() first.')
+            raise Exception('Journal not parsed.')
         
         return self._tasks
     
@@ -475,8 +485,8 @@ class Journal(Block):
         self.extra_lines = []
         self.children = []
         self._catch_all_block = None
-        self._problems = None
-        self._tasks = None
+        self._problems = []
+        self._tasks = []
         
         current_block = self
         
@@ -487,7 +497,11 @@ class Journal(Block):
                 
                 if not content.startswith('-'):
                     # The line is a continuation of the current block
-                    current_block.add_line(content)
+                    try:
+                        current_block.add_line(content)
+                    except ParseError as e:
+                        self._problems.append(('warning', str(e)))
+                    
                     continue
                 
                 block_cls = Block
@@ -534,7 +548,7 @@ class Journal(Block):
         
         date = self.date
         
-        problems = self._problems = []
+        problems = self._problems
         all_tasks = self._tasks = find_tasks(self)
         num_tasks = len(all_tasks)
         

@@ -3,7 +3,7 @@ from os import path
 
 from jogger.tasks import Task
 
-from ..exceptions import ParseError, Return
+from ..exceptions import Return
 from ..utils import Journal, format_duration, parse_duration_input
 
 
@@ -178,9 +178,6 @@ class SeqTask(Task):
         except FileNotFoundError:
             self.stdout.write(f'No journal found for {journal.date}', style='error')
             return None
-        except ParseError as e:
-            self.stdout.write(f'Error parsing journal for {journal.date}: {e}', style='error')
-            raise Return()
         
         if show_summary:
             self.show_journal_summary(journal)
