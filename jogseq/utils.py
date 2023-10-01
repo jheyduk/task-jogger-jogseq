@@ -4,6 +4,10 @@ import re
 
 TASK_ID_RE = re.compile(r'^([A-Z]+-\d+):?$')
 
+# When content lines are trimmed (e.g. when displayed in error messages),
+# trim to this length
+BLOCK_CONTENT_TRIM_LENGTH = 50
+
 
 def parse_duration_timestamp(timestamp_str):
     """
@@ -212,6 +216,16 @@ class Block:
         if parent:
             parent.children.append(self)
     
+    @property
+    def trimmed_content(self):
+        
+        trim_length = BLOCK_CONTENT_TRIM_LENGTH
+        
+        if len(self.content) > trim_length:
+            return f'{self.content[:trim_length - 1]}…'
+        
+        return self.content
+    
     def _process_new_line(self, content):
         
         if content and content.split()[0].endswith('::'):
@@ -220,7 +234,7 @@ class Block:
             
             if key in self.properties:
                 raise ParseError(
-                    f'Duplicate property "{key}" for block "{self.content}". '
+                    f'Duplicate property "{key}" for block "{self.trimmed_content}". '
                     f'Only the first "{key}" property will be retained.'
                 )
             
@@ -602,7 +616,7 @@ class Journal(Block):
             errors = task.validate()
             for messages in errors.values():
                 for msg in messages:
-                    problems.append(('error', f'{msg} for line "{task.content}"'))
+                    problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
         
         # Calculate the total duration and add a formatted version to the
         # journal's properties for future reference
