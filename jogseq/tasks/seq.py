@@ -78,15 +78,7 @@ class SeqTask(Task):
     
     def handle(self, **options):
         
-        try:
-            graph_path = self.settings['graph_path']
-        except KeyError:
-            self.stderr.write('Invalid config: No graph path configured.')
-            raise SystemExit(1)
-        
-        if not path.exists(graph_path):
-            self.stderr.write('Invalid config: Graph path does not exist.')
-            raise SystemExit(1)
+        self.verify_config()
         
         try:
             self.show_menu(
@@ -98,6 +90,42 @@ class SeqTask(Task):
             # The main menu was used to exit the program
             self.stdout.write('\nExiting...')
             raise SystemExit()
+    
+    def verify_config(self):
+        
+        try:
+            graph_path = self.settings['graph_path']
+        except KeyError:
+            self.stderr.write('Invalid config: No graph path configured.')
+            raise SystemExit(1)
+        
+        if not path.exists(graph_path):
+            self.stderr.write('Invalid config: Graph path does not exist.')
+            raise SystemExit(1)
+        
+        invalid_duration_msg = 'Invalid config: Target duration must be a positive integer.'
+        
+        try:
+            duration = self.get_target_duration()
+        except ValueError:
+            self.stderr.write(invalid_duration_msg)
+            raise SystemExit(1)
+        
+        if duration < 0:
+            self.stderr.write(invalid_duration_msg)
+            raise SystemExit(1)
+        
+        invalid_switch_cost_msg = 'Invalid config: Switching cost must be a positive integer.'
+        
+        try:
+            cost = self.get_switching_cost()
+        except ValueError:
+            self.stderr.write(invalid_switch_cost_msg)
+            raise SystemExit(1)
+        
+        if cost < 0:
+            self.stderr.write(invalid_switch_cost_msg)
+            raise SystemExit(1)
     
     def show_menu(self, intro, return_option, *other_options):
         """
@@ -219,17 +247,7 @@ class SeqTask(Task):
         Return the configured target duration in seconds.
         """
         
-        error = 'Invalid config: Target duration must be a positive integer.'
-        
-        try:
-            duration = int(self.settings.get('target_duration', self.DEFAULT_TARGET_DURATION))
-        except ValueError:
-            self.stderr.write(error)
-            raise SystemExit(1)
-        
-        if duration < 0:
-            self.stderr.write(error)
-            raise SystemExit(1)
+        duration = int(self.settings.get('target_duration', self.DEFAULT_TARGET_DURATION))
         
         return duration * 60  # convert from minutes to seconds
     
@@ -238,17 +256,7 @@ class SeqTask(Task):
         Return the configured switching cost in seconds.
         """
         
-        error = 'Invalid config: Switching cost must be a positive integer.'
-        
-        try:
-            cost = int(self.settings.get('switching_cost', self.DEFAULT_SWITCHING_COST))
-        except ValueError:
-            self.stderr.write(error)
-            raise SystemExit(1)
-        
-        if cost < 0:
-            self.stderr.write(error)
-            raise SystemExit(1)
+        cost = int(self.settings.get('switching_cost', self.DEFAULT_SWITCHING_COST))
         
         return cost * 60  # convert from minutes to seconds
     
