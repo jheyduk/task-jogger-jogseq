@@ -3,6 +3,7 @@ import os
 import re
 
 TASK_ID_RE = re.compile(r'^([A-Z]+-\d+):?$')
+LINK_RE = re.compile(r'\[\[(.*?)\]\]')
 
 # When content lines are trimmed (e.g. when displayed in error messages),
 # trim to this length
@@ -115,6 +116,21 @@ def format_duration(total_seconds):
     return ' '.join(parts)
 
 
+def sanitise(content):
+    """
+    Sanitise a line parsed from a Logseq markdown file, removing certain
+    Logseq-specific formatting elements.
+    """
+    
+    # Remove [CATCH-ALL] marker
+    content = content.replace('[CATCH-ALL] ', '')
+    
+    # Remove links (wrapping double square brackets)
+    content = LINK_RE.sub(r'\1', content)
+    
+    return content
+
+
 def find_tasks(block):
     """
     Return a list of the tasks nested under the given ``Block`` instance,
@@ -210,7 +226,7 @@ class Block:
         self.content = content.replace('-', '', 1).strip()
         
         self.properties = {}
-        self.extra_lines = []
+        self.continuation_lines = []
         self.children = []
         
         if parent:
@@ -218,6 +234,11 @@ class Block:
     
     @property
     def trimmed_content(self):
+        """
+        A version of the block's main content line that is trimmed to a
+        maximum length. Useful to identify the line without displaying its
+        entire content, e.g. in error messages.
+        """
         
         trim_length = BLOCK_CONTENT_TRIM_LENGTH
         
@@ -225,6 +246,15 @@ class Block:
             return f'{self.content[:trim_length - 1]}…'
         
         return self.content
+    
+    @property
+    def sanitised_content(self):
+        """
+        A version of the block's main content line that is sanitised to remove
+        certain Logseq-specific formatting elements.
+        """
+        
+        return sanitise(self.content)
     
     def _process_new_line(self, content):
         
@@ -256,7 +286,54 @@ class Block:
         content = self._process_new_line(content)
         
         if content is not None:  # allow blank lines, just not explicitly nullified lines
-            self.extra_lines.append(content)
+            self.continuation_lines.append(content)
+    
+    def get_all_extra_lines(self, use_indentation=True, simple_output=True):
+        """
+        Return a list of all extra lines of content for the block, beyond its
+        main content line, including:
+        
+        * Any continuation lines.
+        * Any properties.
+        * Any child blocks, recursively.
+        
+        :param use_indentation: Whether to include indentation in the returned
+            lines. Set to False to return top-level extra lines without
+            indentation. This does not propagate to child blocks (if they have
+            their own extra lines, those will be indented).
+        :param simple_output: Whether to generate simpler versions of the
+            returned lines. Simple outputs sanitise lines to remove certain
+            Logseq-specific formatting elements, and don't include properties.
+        """
+        
+        lines = []
+        
+        continuation_indent = ''
+        child_indent = ''
+        if use_indentation:
+            continuation_indent = '  '
+            child_indent = '  ' if simple_output else '\t'
+        
+        # Add any continuation lines
+        for line in self.continuation_lines:
+            line = f'{continuation_indent}{line}'
+            if simple_output:
+                line = sanitise(line)
+            
+            lines.append(line)
+        
+        # Add any child blocks (and their extra lines)
+        for child_block in self.children:
+            lines.append(f'{child_indent}- {child_block.sanitised_content}')
+            
+            child_lines = child_block.get_all_extra_lines(
+                simple_output=simple_output
+            )
+            
+            for line in child_lines:
+                lines.append(f'{child_indent}{line}')
+        
+        return lines
 
 
 class Task(Block):
@@ -306,6 +383,13 @@ class Task(Block):
         self.description = ' '.join(description)
         
         self.logbook = []
+    
+    @property
+    def sanitised_content(self):
+        
+        # The sanitised version of a Task's content is just the
+        # description portion, not the whole line
+        return sanitise(self.description)
     
     def _process_new_line(self, content):
         
@@ -502,7 +586,7 @@ class Journal(Block):
         
         # In the event of re-parsing the journal, reset all relevant attributes
         self.properties = {}
-        self.extra_lines = []
+        self.continuation_lines = []
         self.children = []
         self._catch_all_block = None
         self._problems = []
