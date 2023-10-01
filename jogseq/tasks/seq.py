@@ -353,11 +353,42 @@ class SeqTask(Task):
     
     def handle_log_work__show_worklog(self, journal):
         
-        self.stdout.write('\nWorklog summary:', style='label')
+        self.stdout.write('\nWorklog summary:\n', style='label')
+        
+        make_red = self.styler.error
         
         for task in journal.tasks:
-            # TODO: Show extra lines/children, highlight errors
-            self.stdout.write(f'{task.task_id}: {task.get_total_duration()}; {task.description}')
+            errors = task.validate()
+            
+            task_id = task.task_id
+            if not task_id:
+                task_id = '???'
+            
+            if 'task_id' in errors and 'keyword' not in errors:
+                task_id = make_red(task_id)
+            
+            duration = task.get_total_duration()
+            if not duration:
+                duration = '???'
+            else:
+                duration = format_duration(duration)
+            
+            if 'duration' in errors and 'keyword' not in errors:
+                duration = make_red(duration)
+            
+            output = f'{task_id}: {duration}'
+            description = task.sanitised_content
+            if description:
+                output = f'{output}; {description}'
+            
+            if 'keyword' in errors:
+                output = make_red(output)
+            
+            extra_lines = '\n'.join(task.get_all_extra_lines())
+            if extra_lines:
+                output = f'{output}\n{extra_lines}'
+            
+            self.stdout.write(output)
     
     def handle_log_work__submit_worklog(self, journal):
         
