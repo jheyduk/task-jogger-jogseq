@@ -292,12 +292,12 @@ class Block:
     
     def get_all_extra_lines(self, use_indentation=True, simple_output=True):
         """
-        Return a list of all extra lines of content for the block, beyond its
+        Return a list of all "extra" lines of content for the block, beyond its
         main content line, including:
         
-        * Any continuation lines.
-        * Any properties.
-        * Any child blocks, recursively.
+        * Any continuation lines
+        * Any properties
+        * Any child blocks, recursively
         
         :param use_indentation: Whether to include indentation in the returned
             lines. Set to False to return top-level extra lines without
@@ -306,6 +306,8 @@ class Block:
         :param simple_output: Whether to generate simpler versions of the
             returned lines. Simple outputs sanitise lines to remove certain
             Logseq-specific formatting elements, and don't include properties.
+        
+        :return: A list of strings, each representing an "extra" line in the block.
         """
         
         lines = []
