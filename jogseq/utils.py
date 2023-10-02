@@ -137,12 +137,12 @@ def find_tasks(block):
     by recursively iterating through its children.
     
     :param block: The ``Block`` instance.
-    :return: The list of found ``Task`` instances.
+    :return: The list of found ``TaskBlock`` instances.
     """
     
     tasks = []
     for child in block.children:
-        if isinstance(child, Task):
+        if isinstance(child, TaskBlock):
             tasks.append(child)
         
         tasks.extend(find_tasks(child))
@@ -217,6 +217,8 @@ class Block:
     * Zero or more properties (key-value pairs).
     * Zero or more child blocks.
     """
+    
+    is_simple_block = True
     
     def __init__(self, indent, content, parent=None):
         
@@ -324,6 +326,10 @@ class Block:
         
         # Add any child blocks (and their extra lines)
         for child_block in self.children:
+            # Skip non-simple child blocks when generating simple output
+            if simple_output and not child_block.is_simple_block:
+                continue
+            
             lines.append(f'{child_indent}- {child_block.sanitised_content}')
             
             child_lines = child_block.get_all_extra_lines(
@@ -336,7 +342,12 @@ class Block:
         return lines
 
 
-class Task(Block):
+class TodoBlock(Block):
+    
+    is_simple_block = False
+
+
+class TaskBlock(Block):
     """
     A parsed Logseq task - a special kind of block that represents a job to
     be worked on. Tasks are denoted by their content beginning with a keyword
@@ -355,6 +366,8 @@ class Task(Block):
     * No time has been logged, either via the logbook or ``time::`` properties.
     """
     
+    is_simple_block = False
+    
     def __init__(self, *args, **kwargs):
         
         super().__init__(*args, **kwargs)
@@ -364,8 +377,8 @@ class Task(Block):
         keyword, *remainder = self.content.split(' ', 2)
         
         # At least one item in the remainder should always exist, because
-        # Tasks are only created if a matching keyword *followed by a space*
-        # is found at the start of the line's content
+        # TaskBlocks are only created if a matching keyword *followed by a
+        # space* is found at the start of the line's content
         task_id = remainder[0]
         if TASK_ID_RE.match(task_id):
             # Remove the task ID from the remainder - the rest (if any) will be
@@ -387,7 +400,7 @@ class Task(Block):
     @property
     def sanitised_content(self):
         
-        # The sanitised version of a Task's content is just the description
+        # The sanitised version of a TaskBlock's content is just the description
         # portion, not the whole line. If the task doesn't have a description,
         # use its parent's sanitised content instead.
         # TODO: Move this functionality behind a setting?
@@ -470,7 +483,7 @@ class Task(Block):
         # Ensure the task is not a child of another task
         p = self.parent
         while p:
-            if isinstance(p, Task):
+            if isinstance(p, TaskBlock):
                 add_error('keyword', 'Nested task detected')
                 break
             
@@ -620,7 +633,9 @@ class Journal(Block):
                 
                 block_cls = Block
                 if content.startswith('- NOW ') or content.startswith('- LATER '):
-                    block_cls = Task
+                    block_cls = TaskBlock
+                elif content.startswith('- TODO '):
+                    block_cls = TodoBlock
                 
                 if indent > current_block.indent:
                     # The line is a child block of the current block
