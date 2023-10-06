@@ -605,8 +605,8 @@ class Journal(Block):
         parse the markdown file for the matching Logseq journal entry. Parsing
         this file populates the journal's attributes with the parsed data.
         
-        :param switching_cost: The estimated context switching cost per task,
-            in seconds.
+        :param switching_cost: A ``SwitchingCost`` object for calculating
+            estimated context switching costs per task, based on their duration.
         """
         
         # In the event of re-parsing the journal, reset all relevant attributes
@@ -669,36 +669,22 @@ class Journal(Block):
         
         * Calculate the total duration of work logged to the journal's tasks.
         * Calculate the total estimated context switching cost of the journal's
-          tasks, based on the number of tasks and the given ``switching_cost``.
+          tasks, based on the duration of those tasks and a sliding scale of
+          switching costs, represented by the given ``switching_cost``.
         * Convert any ``time::`` properties on the tasks into logbook entries.
         * Validate the tasks and compile a list of any errors encountered.
         
-        :param switching_cost: The estimated context switching cost per task,
-            in seconds.
+        :param switching_cost: A ``SwitchingCost`` object for calculating
+            estimated context switching costs per task, based on their duration.
         """
         
         date = self.date
         
         problems = self._problems
         all_tasks = self._tasks = find_tasks(self)
-        num_tasks = len(all_tasks)
         
-        # Calculate and log context switching cost (in seconds). Add it to
-        # the catch-all task's logbook, if any, so it can be allocated to a
-        # relevant task.
-        total_switching_cost = round_duration(num_tasks * switching_cost)
-        catch_all_block = self.catch_all_block
-        if catch_all_block:
-            catch_all_block.add_to_logbook(date, total_switching_cost)
-        elif total_switching_cost > 0:
-            problems.append(('warning', (
-                'No CATCH-ALL task found to log context switching cost against. '
-                'Not included in total duration.'
-            )))
-        
-        # Also add a formatted version of the switching cost as a journal
-        # property for future reference.
-        self.properties['switching-cost'] = format_duration(total_switching_cost)
+        total_duration = 0
+        total_switching_cost = 0
         
         for task in all_tasks:
             # Convert any time:: properties to logbook entries
@@ -722,6 +708,17 @@ class Journal(Block):
                     
                     task.add_to_logbook(date, time_value)
             
+            # Taking into account any converted time:: properties, calculate
+            # the task's duration and add it to the journal's total duration
+            task_duration = task.get_total_duration()
+            total_duration += task_duration
+            
+            # Also calculate the task's switching cost, if any, and add it to
+            # the journal's duration total as well
+            task_switching_cost = switching_cost.for_duration(task_duration)
+            total_switching_cost += task_switching_cost
+            total_duration += task_switching_cost
+            
             # Add any errors with the task definition to the journal's overall
             # list of problems
             errors = task.validate()
@@ -729,7 +726,22 @@ class Journal(Block):
                 for msg in messages:
                     problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
         
-        # Calculate the total duration and add a formatted version to the
-        # journal's properties for future reference
-        total_duration = sum(t.get_total_duration() for t in all_tasks)
+        # Add the estimated switching cost to the catch-all task's logbook,
+        # if any, so it can be allocated to a relevant task
+        if total_switching_cost > 0:
+            catch_all_block = self.catch_all_block
+            if catch_all_block:
+                catch_all_block.add_to_logbook(date, total_switching_cost)
+            else:
+                problems.insert(0, ('warning', (
+                    'No CATCH-ALL task found to log context switching cost against. '
+                    'Not included in total duration.'
+                )))
+        
+        # Also add a formatted version of the switching cost as a journal
+        # property for future reference
+        self.properties['switching-cost'] = format_duration(total_switching_cost)
+        
+        # Finally, format the total duration and add it as a journal property
+        # for future reference
         self.properties['total-duration'] = format_duration(total_duration)

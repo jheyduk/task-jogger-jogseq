@@ -1,4 +1,5 @@
 import datetime
+import math
 from os import path
 
 from jogger.tasks import Task
@@ -66,10 +67,88 @@ class Menu(dict):
         return super().__getitem__(key)
 
 
+class SwitchingCost:
+    """
+    Helper object for containing scaling switching cost details and calculating
+    estimated switching costs for given task durations.
+    """
+    
+    def __init__(self, cost_range, duration_range):
+        
+        # Convert duration min/max given in minutes to seconds
+        min_duration, max_duration = duration_range
+        self.min_duration = min_duration * 60
+        self.max_duration = max_duration * 60
+        
+        # Convert switching cost min/max given in minutes to seconds
+        min_cost, max_cost = self._extract_costs(cost_range)
+        self.min_cost = min_cost * 60
+        self.max_cost = max_cost * 60
+        
+        # Store a list of the full range of switching costs, in seconds
+        self.cost_scale = [i * 60 for i in range(min_cost, max_cost + 1)]
+        
+        # Calculate the "duration step" - the number of seconds of a duration
+        # between each switching cost in the above scale. E.g. there may be
+        # 5 minutes (300 seconds) worth of duration between each switching cost
+        # (10 minutes of duration may incur a 2 minute switching cost, and 15
+        # minutes of duration may incur a 3 minute switching cost, etc).
+        cost_diff = max_cost - min_cost
+        duration_diff = max_duration - min_duration
+        self.duration_step = math.ceil(duration_diff / cost_diff) * 60
+    
+    def _extract_costs(self, cost_range):
+        
+        invalid_msg = (
+            'Invalid config: Switching cost must be a range of minutes,'
+            ' e.g. 1-15, 5-30, etc.'
+        )
+        
+        try:
+            min_cost, max_cost = cost_range.split('-')
+            min_cost, max_cost = int(min_cost), int(max_cost)
+        except ValueError:
+            raise ValueError(invalid_msg)
+        
+        if min_cost < 0 or min_cost > max_cost:
+            raise ValueError(invalid_msg)
+        
+        # Find the maximum span of a switching cost range that can be
+        # configured for the given duration range. The span of switching
+        # costs must be under half that of the duration. E.g. a duration
+        # range of 0-60 minutes supports a maximum switching cost span of
+        # 30 minutes. That could mean a range of 0-30 minutes, 15-45
+        # minutes, etc. Shorter spans are valid as well, this only
+        # gives the maximum possible.
+        max_range = int((self.max_duration - self.min_duration) / 60 / 2)
+        
+        if max_cost - min_cost > max_range:
+            raise ValueError(
+                'Invalid config: Switching cost must be a range spanning no'
+                f' more than {max_range} minutes.'
+            )
+        
+        return min_cost, max_cost
+    
+    def for_duration(self, duration):
+        """
+        Return the switching cost for the given duration, in seconds.
+        """
+        
+        if duration <= self.min_duration:
+            return self.min_cost
+        elif duration >= self.max_duration:
+            return self.max_cost
+        else:
+            index = duration // self.duration_step
+            return self.cost_scale[index]
+
+
 class SeqTask(Task):
     
-    DEFAULT_SWITCHING_COST = 0
-    DEFAULT_TARGET_DURATION = 8 * 60  # 8 hours
+    DEFAULT_TARGET_DURATION = 7 * 60  # 7 hours
+    DEFAULT_SWITCHING_COST = '0-0'  # min and max of 0 minutes (no switching cost)
+    SWITCHING_COST_DURATION_RANGE = (5, 65)
     
     help = (
         'Begin the Logseq/Jira interactive integration program. This program '
@@ -93,6 +172,7 @@ class SeqTask(Task):
     
     def verify_config(self):
         
+        # Verify graph_path
         try:
             graph_path = self.settings['graph_path']
         except KeyError:
@@ -103,7 +183,8 @@ class SeqTask(Task):
             self.stderr.write('Invalid config: Graph path does not exist.')
             raise SystemExit(1)
         
-        invalid_duration_msg = 'Invalid config: Target duration must be a positive integer.'
+        # Verify target_duration
+        invalid_duration_msg = 'Invalid config: Target duration must be a positive number of minutes.'
         
         try:
             duration = self.get_target_duration()
@@ -115,16 +196,11 @@ class SeqTask(Task):
             self.stderr.write(invalid_duration_msg)
             raise SystemExit(1)
         
-        invalid_switch_cost_msg = 'Invalid config: Switching cost must be a positive integer.'
-        
+        # Verify switching_cost
         try:
-            cost = self.get_switching_cost()
-        except ValueError:
-            self.stderr.write(invalid_switch_cost_msg)
-            raise SystemExit(1)
-        
-        if cost < 0:
-            self.stderr.write(invalid_switch_cost_msg)
+            self.get_switching_cost()
+        except ValueError as e:
+            self.stderr.write(str(e))
             raise SystemExit(1)
     
     def show_menu(self, intro, return_option, *other_options):
@@ -253,12 +329,13 @@ class SeqTask(Task):
     
     def get_switching_cost(self):
         """
-        Return the configured switching cost in seconds.
+        Return a ``SwitchingCost`` object for the calculation of estimated
+        switching costs based on task durations.
         """
         
-        cost = int(self.settings.get('switching_cost', self.DEFAULT_SWITCHING_COST))
+        cost_setting = self.settings.get('switching_cost', self.DEFAULT_SWITCHING_COST)
         
-        return cost * 60  # convert from minutes to seconds
+        return SwitchingCost(cost_setting, self.SWITCHING_COST_DURATION_RANGE)
     
     def show_journal_summary(self, journal):
         """
