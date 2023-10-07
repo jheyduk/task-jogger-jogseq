@@ -150,6 +150,20 @@ def find_tasks(block):
     return tasks
 
 
+def get_block_class(content):
+    """
+    Return the most suitable Block subclass for the given content line.
+    """
+    
+    block_cls = Block
+    if content.startswith('- NOW ') or content.startswith('- LATER '):
+        block_cls = TaskBlock
+    elif content.startswith('- TODO '):
+        block_cls = TodoBlock
+    
+    return block_cls
+
+
 class ParseError(Exception):
     """
     Raised when an unresolvable issue is encountered when parsing a journal.
@@ -633,11 +647,7 @@ class Journal(Block):
                     
                     continue
                 
-                block_cls = Block
-                if content.startswith('- NOW ') or content.startswith('- LATER '):
-                    block_cls = TaskBlock
-                elif content.startswith('- TODO '):
-                    block_cls = TodoBlock
+                block_cls = get_block_class(content)
                 
                 if indent > current_block.indent:
                     # The line is a child block of the current block
