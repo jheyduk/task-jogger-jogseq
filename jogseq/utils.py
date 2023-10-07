@@ -682,6 +682,7 @@ class Journal(Block):
         
         problems = self._problems
         all_tasks = self._tasks = find_tasks(self)
+        catch_all_block = self.catch_all_block
         
         total_duration = 0
         total_switching_cost = 0
@@ -714,10 +715,12 @@ class Journal(Block):
             total_duration += task_duration
             
             # Also calculate the task's switching cost, if any, and add it to
-            # the journal's duration total as well
-            task_switching_cost = switching_cost.for_duration(task_duration)
-            total_switching_cost += task_switching_cost
-            total_duration += task_switching_cost
+            # the journal's duration total as well. Do not calculate a
+            # switching cost for the catch-all task, if any.
+            if task is not catch_all_block:
+                task_switching_cost = switching_cost.for_duration(task_duration)
+                total_switching_cost += task_switching_cost
+                total_duration += task_switching_cost
             
             # Add any errors with the task definition to the journal's overall
             # list of problems
@@ -729,7 +732,6 @@ class Journal(Block):
         # Add the estimated switching cost to the catch-all task's logbook,
         # if any, so it can be allocated to a relevant task
         if total_switching_cost > 0:
-            catch_all_block = self.catch_all_block
             if catch_all_block:
                 catch_all_block.add_to_logbook(date, total_switching_cost)
             else:
