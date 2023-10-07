@@ -361,6 +361,10 @@ class SeqTask(Task):
         num_tasks = self.styler.label(len(journal.tasks))
         self.stdout.write(f'Found {num_tasks} unlogged tasks')
         
+        if not journal.tasks:
+            self.stdout.write('Nothing to report', style='warning')
+            return
+        
         switching_cost_str = self.styler.label(journal.properties['switching-cost'])
         self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
         
@@ -443,6 +447,10 @@ class SeqTask(Task):
     
     def handle_log_work__show_worklog(self, journal):
         
+        if not journal.tasks:
+            self.stdout.write('\nJournal contains no tasks to summarise', style='warning')
+            return
+        
         self.stdout.write('\nWorklog summary:\n', style='label')
         
         make_red = self.styler.error
@@ -482,6 +490,10 @@ class SeqTask(Task):
     
     def handle_log_work__submit_worklog(self, journal):
         
+        if not journal.tasks:
+            self.stdout.write('\nJournal contains no tasks to submit', style='warning')
+            return
+        
         self.stdout.write(
             '\nIf you continue, the tasks in this journal will be submitted to'
             ' Jira as worklog entries. The journal file will then be updated to'
@@ -505,6 +517,10 @@ class SeqTask(Task):
         self.stdout.write('Not implemented.', style='error')
     
     def handle_log_work__update_journal(self, journal):
+        
+        if not journal.tasks:
+            self.stdout.write('\nJournal contains no tasks to update', style='warning')
+            return
         
         self.stdout.write(
             '\nIf you continue, the source Logseq file for this journal will'
