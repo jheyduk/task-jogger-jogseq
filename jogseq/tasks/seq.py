@@ -85,17 +85,23 @@ class SwitchingCost:
         self.min_cost = min_cost * 60
         self.max_cost = max_cost * 60
         
-        # Store a list of the full range of switching costs, in seconds
-        self.cost_scale = [i * 60 for i in range(min_cost, max_cost + 1)]
-        
-        # Calculate the "duration step" - the number of seconds of a duration
-        # between each switching cost in the above scale. E.g. there may be
-        # 5 minutes (300 seconds) worth of duration between each switching cost
-        # (10 minutes of duration may incur a 2 minute switching cost, and 15
-        # minutes of duration may incur a 3 minute switching cost, etc).
-        cost_diff = max_cost - min_cost
-        duration_diff = max_duration - min_duration
-        self.duration_step = math.ceil(duration_diff / cost_diff) * 60
+        if min_cost == max_cost:
+            # There is no range of switching costs, only a single value. No
+            # sliding scale needs to be used.
+            self.cost_scale = None
+            self.duration_step = None
+        else:
+            # Store a list of the full range of switching costs, in seconds
+            self.cost_scale = [i * 60 for i in range(min_cost, max_cost + 1)]
+            
+            # Calculate the "duration step" - the number of seconds of a duration
+            # between each switching cost in the above scale. E.g. there may be
+            # 5 minutes (300 seconds) worth of duration between each switching cost
+            # (10 minutes of duration may incur a 2 minute switching cost, and 15
+            # minutes of duration may incur a 3 minute switching cost, etc).
+            cost_diff = max_cost - min_cost
+            duration_diff = max_duration - min_duration
+            self.duration_step = math.ceil(duration_diff / cost_diff) * 60
     
     def _extract_costs(self, cost_range):
         
@@ -135,6 +141,13 @@ class SwitchingCost:
         Return the switching cost for the given duration, in seconds.
         """
         
+        if not self.cost_scale:
+            # There is only a single switching cost, so use that
+            return self.min_cost
+        
+        # Calculate the appropriate switching cost based on a sliding scale
+        # relative to the given duration. If the duration exceeds the bounds
+        # of the scale, use the min/max switching cost as appropriate.
         if duration <= self.min_duration:
             return self.min_cost
         elif duration >= self.max_duration:
