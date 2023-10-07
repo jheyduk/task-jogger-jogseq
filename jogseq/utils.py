@@ -724,13 +724,12 @@ class Journal(Block):
             task_duration = task.get_total_duration()
             total_duration += task_duration
             
-            # Also calculate the task's switching cost, if any, and add it to
-            # the journal's duration total as well. Do not calculate a
-            # switching cost for the catch-all task, if any.
+            # Also calculate the task's switching cost, ignoring the catch-all
+            # task, if any. Do NOT add to the journal's total duration at this
+            # point, as the total switching cost will be rounded at the end
+            # and added to the total duration then.
             if task is not catch_all_block:
-                task_switching_cost = switching_cost.for_duration(task_duration)
-                total_switching_cost += task_switching_cost
-                total_duration += task_switching_cost
+                total_switching_cost += switching_cost.for_duration(task_duration)
             
             # Add any errors with the task definition to the journal's overall
             # list of problems
@@ -739,9 +738,13 @@ class Journal(Block):
                 for msg in messages:
                     problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
         
-        # Add the estimated switching cost to the catch-all task's logbook,
-        # if any, so it can be allocated to a relevant task
         if total_switching_cost > 0:
+            # Round the switching cost and add it to the journal's total duration
+            total_switching_cost = round_duration(total_switching_cost)
+            total_duration += total_switching_cost
+            
+            # Add the estimated switching cost to the catch-all task's logbook,
+            # if any, so it can be allocated to a relevant task
             if catch_all_block:
                 catch_all_block.add_to_logbook(date, total_switching_cost)
             else:
