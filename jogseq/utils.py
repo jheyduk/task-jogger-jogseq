@@ -304,6 +304,15 @@ class Block:
         if content is not None:  # allow blank lines, just not explicitly nullified lines
             self.continuation_lines.append(content)
     
+    def get_property_lines(self):
+        
+        lines = []
+        
+        for key, value in self.properties.items():
+            lines.append(f'{key}:: {value}')
+        
+        return lines
+    
     def get_all_extra_lines(self, use_indentation=True, simple_output=True):
         """
         Return a list of all "extra" lines of content for the block, beyond its
@@ -332,6 +341,11 @@ class Block:
             continuation_indent = '  '
             child_indent = '  ' if simple_output else '\t'
         
+        # Add any property lines (non-simple output only)
+        if not simple_output:
+            for line in self.get_property_lines():
+                lines.append(f'{continuation_indent}{line}')
+        
         # Add any continuation lines
         for line in self.continuation_lines:
             line = f'{continuation_indent}{line}'
@@ -346,12 +360,14 @@ class Block:
             if simple_output and not child_block.is_simple_block:
                 continue
             
-            lines.append(f'{child_indent}- {child_block.sanitised_content}')
+            child_content = child_block.sanitised_content if simple_output else child_block.content
+            lines.append(f'{child_indent}- {child_content}')
             
-            child_lines = child_block.get_all_extra_lines(
-                simple_output=simple_output
-            )
-            
+            # Get all the child's extra lines as well. Propagate `simple_output`,
+            # but not `use_indentation` - even if indentation is excluded at the
+            # top level, it is needed at the child level to properly indicate
+            # nesting.
+            child_lines = child_block.get_all_extra_lines(simple_output=simple_output)
             for line in child_lines:
                 lines.append(f'{child_indent}{line}')
         
