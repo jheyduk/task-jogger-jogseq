@@ -549,3 +549,5 @@ class SeqTask(Task):
         journal.write_back()
         
         self.stdout.write('\nJournal file updated.', style='success')
+        input('Hit ENTER to return to the main menu...')
+        raise Return(ttl=1)  # skip "log work" menu and return to main menu
