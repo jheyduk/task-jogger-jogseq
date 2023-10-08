@@ -546,6 +546,20 @@ class TaskBlock(Block):
         total = sum(log.duration for log in self.logbook)
         
         return round_duration(total)
+    
+    def get_property_lines(self):
+        
+        lines = super().get_property_lines()
+        
+        if self.logbook:
+            lines.append(':LOGBOOK:')
+            
+            for log in self.logbook:
+                lines.append(log.content)
+            
+            lines.append(':END:')
+        
+        return lines
 
 
 class Journal(Block):
