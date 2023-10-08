@@ -539,9 +539,6 @@ class SeqTask(Task):
             
             self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
         
-        # TODO: Optionally mark all tasks as done (prompt user, allow skipping
-        #   if coming directly from submitting via API, which should automatically
-        #   flag as done)
-        # TODO: Write journal file back
-        # TODO: Show prompt "hit ENTER to return to main menu"
-        self.stdout.write('Not implemented.', style='error')
+        journal.write_back()
+        
+        self.stdout.write('\nJournal file updated.', style='success')

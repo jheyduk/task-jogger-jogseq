@@ -201,7 +201,7 @@ class LogbookEntry:
         hours, remainder = divmod(duration, 3600)
         minutes, seconds = divmod(remainder, 60)
         
-        return cls(f'CLOCK: [{start_time_str}]--[{end_time_str}] => {hours:02}:{minutes:02}:{seconds:02}')
+        return cls(f'CLOCK: [{start_time_str}]--[{end_time_str}] =>  {hours:02}:{minutes:02}:{seconds:02}')
     
     def __init__(self, content):
         
@@ -790,3 +790,24 @@ class Journal(Block):
         # Finally, format the total duration and add it as a journal property
         # for future reference
         self.properties['total-duration'] = format_duration(total_duration)
+    
+    def write_back(self):
+        """
+        Using the journal's configured base graph path and date, write back to
+        the corresponding markdown file for the matching Logseq journal entry.
+        This persists all modifications made to the Journal and its child
+        blocks, including added properties, additional logbook entries, etc.
+        """
+        
+        with open(self.path, 'w') as f:
+            # The journal's extra lines include its own properties and
+            # continuation lines, but also its children, recursively -
+            # effectively the journal's entire content.
+            # Passing `use_indentation=False` ensures the journal's top-level
+            # properties, continuation lines, and blocks are not indented, but
+            # nested children are.
+            # Passing `simple_output=False` includes all elements of each
+            # child block in full - nothing is skipped or sanitised as it
+            # is for short task descriptions.
+            for line in self.get_all_extra_lines(use_indentation=False, simple_output=False):
+                f.write(f'{line}\n')
