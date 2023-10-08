@@ -13,7 +13,11 @@ class Return(Exception):
     previous menu) to exit the program.
     """
     
-    pass
+    def __init__(self, ttl=0):
+        
+        self.ttl = ttl
+        
+        super().__init__()
 
 
 class Menu(dict):
@@ -269,10 +273,13 @@ class SeqTask(Task):
             args = selected_option.get('args', ())
             try:
                 handler(*args)
-            except Return:
-                # The handler's process was interrupted in order to
-                # return to the menu
-                pass
+            except Return as e:
+                # The handler's process was interrupted in order to return
+                # to a menu. If it's TTL has not reached 0, re-raise the
+                # exception (with a decremented TTL) in order to return to
+                # a higher level menu.
+                if e.ttl:
+                    raise Return(ttl=e.ttl - 1)
     
     def show_confirmation_prompt(self, prompt):
         """
