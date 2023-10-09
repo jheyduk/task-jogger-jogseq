@@ -122,9 +122,6 @@ def sanitise(content):
     Logseq-specific formatting elements.
     """
     
-    # Remove [CATCH-ALL] marker
-    content = content.replace('[CATCH-ALL] ', '')
-    
     # Remove links (wrapping double square brackets)
     content = LINK_RE.sub(r'\1', content)
     
@@ -148,6 +145,27 @@ def find_tasks(block):
         tasks.extend(find_tasks(child))
     
     return tasks
+
+
+def find_by_property(block, property_name):
+    """
+    Return a list of the blocks nested under the given ``Block`` instance
+    that have a property with the given name, by recursively iterating
+    through its children.
+    
+    :param block: The ``Block`` instance.
+    :param property_name: The name of the property to search for.
+    :return: The list of found ``Block`` instances.
+    """
+    
+    matches = []
+    for child in block.children:
+        if property_name in child.properties:
+            matches.append(child)
+        
+        matches.extend(find_by_property(child, property_name))
+    
+    return matches
 
 
 def get_block_class(content):
@@ -599,32 +617,6 @@ class Journal(Block):
         self._tasks = None
     
     @property
-    def catch_all_block(self):
-        """
-        A special task block to which the estimated context switching cost
-        can be logged.
-        """
-        
-        return self._catch_all_block
-    
-    @catch_all_block.setter
-    def catch_all_block(self, block):
-        
-        problems = self._problems
-        if problems is None:
-            raise Exception('Journal not parsed.')
-        
-        if self._catch_all_block and self._catch_all_block is not block:
-            # The journal already has a catch-all task registered, and it is
-            # different to the one given
-            problems.append(('warning', (
-                'Only a single CATCH-ALL block is supported per journal. '
-                'Subsequent CATCH-ALL blocks have no effect.'
-            )))
-        
-        self._catch_all_block = block
-    
-    @property
     def problems(self):
         """
         A list of problems present in the journal. Each item in the list is
@@ -636,6 +628,35 @@ class Journal(Block):
             raise Exception('Journal not parsed.')
         
         return self._problems
+    
+    @property
+    def catch_all_block(self):
+        """
+        A special task block to which the estimated context switching cost
+        can be logged.
+        """
+        
+        if self._catch_all_block is not None:
+            return self._catch_all_block
+        
+        problems = self._problems
+        if problems is None:
+            raise Exception('Journal not parsed.')
+        
+        matches = find_by_property(self, 'catch-all')
+        
+        if not matches:
+            return None
+        
+        if len(matches) > 1:
+            problems.append(('warning', (
+                'Only a single catch-all block is supported per journal. '
+                'Subsequent catch-all blocks have no effect.'
+            )))
+        
+        self._catch_all_block = matches[0]
+        
+        return self._catch_all_block
     
     @property
     def tasks(self):
@@ -701,9 +722,6 @@ class Journal(Block):
                     parent_block = current_block
                 
                 current_block = block_cls(indent, content, parent_block)
-                
-                if '[CATCH-ALL]' in current_block.content:
-                    self.catch_all_block = current_block
         
         self._process_tasks(switching_cost)
     
@@ -784,7 +802,7 @@ class Journal(Block):
                 catch_all_block.add_to_logbook(date, total_switching_cost)
             else:
                 problems.insert(0, ('warning', (
-                    'No CATCH-ALL task found to log context switching cost against. '
+                    'No catch-all task found to log context switching cost against. '
                     'Not included in total duration.'
                 )))
         
