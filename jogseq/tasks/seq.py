@@ -448,7 +448,7 @@ class SeqTask(Task):
             'Return to main menu',
             ('Show worklog summary', self.handle_log_work__show_worklog, handler_args),
             ('[unimplemented] Submit worklog', self.handle_log_work__submit_worklog, handler_args),
-            ('[unimplemented] Update journal', self.handle_log_work__update_journal, handler_args),
+            ('Update journal', self.handle_log_work__update_journal, handler_args),
             ('Re-parse journal', self.parse_journal, handler_args)
         )
     

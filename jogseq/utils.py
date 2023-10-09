@@ -576,10 +576,15 @@ class Journal(Block):
     
     * Calculating the total duration of work logged to the journal's tasks.
     * Calculating the total estimated context switching cost of the journal's
-      tasks, based on the number of tasks and a given estimated cost per task.
+      tasks, based on the duration of those tasks and a given sliding scale of
+      per-task switching costs.
     * Tracking an optional "catch-all" task, to which the estimated context
       switching cost can be logged. Only a single catch-all task can exist per
       journal.
+    
+    Journals can also write back to their markdown file, persisting any changes
+    made to the journal and its child blocks, including added properties,
+    additional logbook entries, etc.
     """
     
     def __init__(self, graph_path, date):
