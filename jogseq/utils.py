@@ -669,6 +669,24 @@ class Journal(Block):
         
         return self._tasks
     
+    @property
+    def logged_tasks(self):
+        """
+        A list of all tasks present in the journal that have been marked as
+        logged (i.e. have a `logged::` property).
+        """
+        
+        return [t for t in self.tasks if 'logged' in t.properties]
+    
+    @property
+    def unlogged_tasks(self):
+        """
+        A list of all tasks present in the journal that have not been marked as
+        logged (i.e. do not have a `logged::` property).
+        """
+        
+        return [t for t in self.tasks if 'logged' not in t.properties]
+    
     def parse(self, switching_cost):
         """
         Using the journal's configured base graph path and date, locate and

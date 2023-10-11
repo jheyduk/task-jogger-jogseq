@@ -7,6 +7,41 @@ from jogger.tasks import Task
 from ..utils import Journal, format_duration, parse_duration_input
 
 
+def get_task_summary(task, error_styler):
+    
+    errors = task.validate()
+    
+    task_id = task.task_id
+    if not task_id:
+        task_id = '???'
+    
+    if 'task_id' in errors and 'keyword' not in errors:
+        task_id = error_styler(task_id)
+    
+    duration = task.get_total_duration()
+    if not duration:
+        duration = '???'
+    else:
+        duration = format_duration(duration)
+    
+    if 'duration' in errors and 'keyword' not in errors:
+        duration = error_styler(duration)
+    
+    output = f'{task_id}: {duration}'
+    description = task.sanitised_content
+    if description:
+        output = f'{output}; {description}'
+    
+    if 'keyword' in errors:
+        output = error_styler(output)
+    
+    extra_lines = '\n'.join(task.get_all_extra_lines())
+    if extra_lines:
+        output = f'{output}\n{extra_lines}'
+    
+    return output
+
+
 class Return(Exception):
     """
     Raised to trigger a return to the previous menu, or (if there is no
@@ -366,7 +401,8 @@ class SeqTask(Task):
         self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
         
         num_tasks = self.styler.label(len(journal.tasks))
-        self.stdout.write(f'Found {num_tasks} unlogged tasks')
+        num_unlogged_tasks = self.styler.label(len(journal.unlogged_tasks))
+        self.stdout.write(f'Found {num_unlogged_tasks} unlogged tasks (out of {num_tasks} total)')
         
         if not journal.tasks:
             self.stdout.write('Nothing to report', style='warning')
@@ -458,47 +494,29 @@ class SeqTask(Task):
             self.stdout.write('\nJournal contains no tasks to summarise', style='warning')
             return
         
-        self.stdout.write('\nWorklog summary:\n', style='label')
+        logged_tasks = journal.logged_tasks
+        unlogged_tasks = journal.unlogged_tasks
         
-        make_red = self.styler.error
+        if logged_tasks:
+            self.stdout.write('\nLogged task summary:\n', style='label')
+            
+            for task in logged_tasks:
+                summary = get_task_summary(task, self.styler.error)
+                self.stdout.write(summary)
         
-        for task in journal.tasks:
-            errors = task.validate()
+        if unlogged_tasks:
+            self.stdout.write('\nUnlogged task summary:\n', style='label')
             
-            task_id = task.task_id
-            if not task_id:
-                task_id = '???'
-            
-            if 'task_id' in errors and 'keyword' not in errors:
-                task_id = make_red(task_id)
-            
-            duration = task.get_total_duration()
-            if not duration:
-                duration = '???'
-            else:
-                duration = format_duration(duration)
-            
-            if 'duration' in errors and 'keyword' not in errors:
-                duration = make_red(duration)
-            
-            output = f'{task_id}: {duration}'
-            description = task.sanitised_content
-            if description:
-                output = f'{output}; {description}'
-            
-            if 'keyword' in errors:
-                output = make_red(output)
-            
-            extra_lines = '\n'.join(task.get_all_extra_lines())
-            if extra_lines:
-                output = f'{output}\n{extra_lines}'
-            
-            self.stdout.write(output)
+            for task in unlogged_tasks:
+                summary = get_task_summary(task, self.styler.error)
+                self.stdout.write(summary)
     
     def handle_log_work__submit_worklog(self, journal):
         
-        if not journal.tasks:
-            self.stdout.write('\nJournal contains no tasks to submit', style='warning')
+        unlogged_tasks = journal.unlogged_tasks
+        
+        if not unlogged_tasks:
+            self.stdout.write('\nJournal contains no unlogged tasks to submit', style='warning')
             return
         
         self.stdout.write(
@@ -525,8 +543,10 @@ class SeqTask(Task):
     
     def handle_log_work__update_journal(self, journal):
         
-        if not journal.tasks:
-            self.stdout.write('\nJournal contains no tasks to update', style='warning')
+        unlogged_tasks = journal.unlogged_tasks
+        
+        if not unlogged_tasks:
+            self.stdout.write('\nJournal contains no unlogged tasks to update', style='warning')
             return
         
         self.stdout.write(
