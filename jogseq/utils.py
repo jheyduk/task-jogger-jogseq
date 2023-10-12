@@ -2,7 +2,13 @@ import datetime
 import os
 import re
 
-TASK_ID_RE = re.compile(r'^([A-Z]+-\d+):?$')
+# Recognise task IDs as one or more letters, followed by a hyphen, followed
+# by one or more digits. The ID may optionally be wrapped in double square
+# brackets, and optionally be followed by a colon.
+# E.g. "ABC-123", "ABC-123:", "[[ABC-123]]", "[[ABC-123]]:"
+TASK_ID_RE = re.compile(r'^(\[{2})?([A-Z]+-\d+)(\]{2})?:?$')
+
+# Recognise page links as any text wrapped in double square brackets
 LINK_RE = re.compile(r'\[\[(.*?)\]\]')
 
 # When content lines are trimmed (e.g. when displayed in error messages),
@@ -433,7 +439,7 @@ class TaskBlock(Block):
         if TASK_ID_RE.match(task_id):
             # Remove the task ID from the remainder - the rest (if any) will be
             # the task description
-            task_id = task_id.strip(':')
+            task_id = task_id.strip(':').strip('[').strip(']')
             description = remainder[1:]
         else:
             # The first item of the remainder does not appear to be a task ID,
