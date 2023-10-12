@@ -176,7 +176,7 @@ def get_block_class(content):
     block_cls = Block
     if content.startswith('- NOW ') or content.startswith('- LATER '):
         block_cls = TaskBlock
-    elif content.startswith('- TODO '):
+    elif content.startswith('- TODO ') or content.startswith('- DONE '):
         block_cls = TodoBlock
     
     return block_cls
