@@ -484,6 +484,7 @@ class SeqTask(Task):
             'Return to main menu',
             ('Show worklog summary', self.handle_log_work__show_worklog, handler_args),
             ('[unimplemented] Submit worklog', self.handle_log_work__submit_worklog, handler_args),
+            ('Mark all tasks as logged', self.handle_log_work__mark_logged, handler_args),
             ('Update journal', self.handle_log_work__update_journal, handler_args),
             ('Re-parse journal', self.parse_journal, handler_args)
         )
@@ -541,12 +542,41 @@ class SeqTask(Task):
         # TODO: Submit via API and update journal
         self.stdout.write('Not implemented.', style='error')
     
-    def handle_log_work__update_journal(self, journal):
+    def handle_log_work__mark_logged(self, journal):
         
         unlogged_tasks = journal.unlogged_tasks
         
         if not unlogged_tasks:
-            self.stdout.write('\nJournal contains no unlogged tasks to update', style='warning')
+            self.stdout.write('\nJournal contains no unlogged tasks to mark as logged', style='warning')
+            return
+        
+        self.stdout.write(
+            '\nIf you continue, all tasks in this journal not currently marked'
+            ' as logged will be marked as such. These changes will NOT be'
+            ' written back to the Logseq markdown file. Use the "Update journal"'
+            ' option to persist them.'
+        )
+        
+        self.show_confirmation_prompt('Are you sure you wish to continue')
+        
+        if journal.problems:
+            self.stdout.write(
+                '\nProblems were found parsing this journal. Continuing may'
+                ' result in incorrect or incomplete tasks being marked as logged.'
+            )
+            
+            self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
+        
+        num_unlogged = len(unlogged_tasks)
+        for task in unlogged_tasks:
+            task.properties['logged'] = 'true'
+        
+        self.stdout.write(f'\nMarked {num_unlogged} tasks as logged.', style='success')
+    
+    def handle_log_work__update_journal(self, journal):
+        
+        if not journal.tasks:
+            self.stdout.write('\nJournal contains no tasks to update', style='warning')
             return
         
         self.stdout.write(
