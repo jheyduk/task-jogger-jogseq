@@ -757,10 +757,12 @@ class Journal(Block):
     
     def _validate_properties(self):
         """
-        Verify that expected journal properties, such as `time-logged::` and
-        `total-duration::` are valid. Invalid properties indicate they were
+        Verify that expected journal properties, such as ``time-logged::`` and
+        ``total-duration::`` are valid. Invalid properties indicate they were
         incorrectly added or modified manually, and should render the journal
         as a whole invalid until they are corrected.
+        
+        :return: ``True`` if the journal's properties are valid, ``False`` otherwise.
         """
         
         problems = self._problems
@@ -769,16 +771,54 @@ class Journal(Block):
         has_duration = 'total-duration' in self.properties
         has_switching = 'switching-cost' in self.properties
         
-        falses = tuple(filter(None, (has_time, has_duration, has_switching)))
-        if len(falses) != 0 and len(falses) != 3:
+        # The journal is only valid if either all of the above are present,
+        # or none of them are
+        presences = tuple(filter(None, (has_time, has_duration, has_switching)))
+        all_absent = len(presences) == 0
+        all_present = len(presences) == 3
+        if not all_absent and not all_present:
             problems.append(('error', (
                 'Invalid journal properties.'
-                ' Either all or none of "time-logged", "total-duration", and'
-                ' "switching-cost" properties must be present.'
+                ' Either all or none of the "time-logged", "total-duration",'
+                ' and "switching-cost" properties must be present.'
             )))
             return False
         
-        return True
+        # No further validation is required if none of the properties are present
+        if all_absent:
+            return True
+        
+        # When they are present, their values must be valid
+        valid = True
+        
+        try:
+            datetime.datetime.strptime(self.properties['time-logged'], '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            valid = False
+            problems.append(('error', (
+                'Invalid "time-logged" property.'
+                ' Expected a datetime in the format "YYYY-MM-DD HH:MM:SS".'
+            )))
+        
+        try:
+            parse_duration_input(self.properties['total-duration'])
+        except ParseError:
+            valid = False
+            problems.append(('error', (
+                'Invalid "total-duration" property.'
+                ' Expected a duration in human-friendly shorthand.'
+            )))
+        
+        try:
+            parse_duration_input(self.properties['switching-cost'])
+        except ParseError:
+            valid = False
+            problems.append(('error', (
+                'Invalid "switching-cost" property.'
+                ' Expected a duration in human-friendly shorthand.'
+            )))
+        
+        return valid
     
     def _process_tasks(self, switching_cost):
         """
