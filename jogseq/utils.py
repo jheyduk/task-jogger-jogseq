@@ -750,7 +750,35 @@ class Journal(Block):
                 
                 current_block = block_cls(indent, content, parent_block)
         
-        self._process_tasks(switching_cost)
+        valid = self._validate_properties()
+        
+        if valid:
+            self._process_tasks(switching_cost)
+    
+    def _validate_properties(self):
+        """
+        Verify that expected journal properties, such as `time-logged::` and
+        `total-duration::` are valid. Invalid properties indicate they were
+        incorrectly added or modified manually, and should render the journal
+        as a whole invalid until they are corrected.
+        """
+        
+        problems = self._problems
+        
+        has_time = 'time-logged' in self.properties
+        has_duration = 'total-duration' in self.properties
+        has_switching = 'switching-cost' in self.properties
+        
+        falses = tuple(filter(None, (has_time, has_duration, has_switching)))
+        if len(falses) != 0 and len(falses) != 3:
+            problems.append(('error', (
+                'Invalid journal properties.'
+                ' Either all or none of "time-logged", "total-duration", and'
+                ' "switching-cost" properties must be present.'
+            )))
+            return False
+        
+        return True
     
     def _process_tasks(self, switching_cost):
         """

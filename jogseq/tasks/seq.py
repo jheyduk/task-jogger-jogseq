@@ -406,30 +406,29 @@ class SeqTask(Task):
         
         if not journal.tasks:
             self.stdout.write('Nothing to report', style='warning')
-            return
-        
-        switching_cost = journal._total_switching_cost
-        switching_cost_str = self.styler.label(format_duration(switching_cost))
-        switching_cost_suffix = ''
-        if not journal.catch_all_block:
-            switching_cost_suffix = self.styler.error(' (unloggable)')
-        
-        self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}{switching_cost_suffix}')
-        
-        total_duration = journal._total_duration
-        total_duration_str = self.styler.label(format_duration(total_duration))
-        self.stdout.write(f'Total duration (rounded): {total_duration_str}')
-        
-        # Calculate the "slack time" based on the target duration and the
-        # total duration of all tasks
-        target_duration = self.get_target_duration()
-        slack_time = max(target_duration - total_duration, 0)
-        if slack_time > 0:
-            slack_time_str = self.styler.warning(format_duration(slack_time))
         else:
-            slack_time_str = self.styler.label('None! You work too hard.')
-        
-        self.stdout.write(f'Slack time: {slack_time_str}')
+            switching_cost = journal._total_switching_cost
+            switching_cost_str = self.styler.label(format_duration(switching_cost))
+            switching_cost_suffix = ''
+            if not journal.catch_all_block:
+                switching_cost_suffix = self.styler.error(' (unloggable)')
+            
+            self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}{switching_cost_suffix}')
+            
+            total_duration = journal._total_duration
+            total_duration_str = self.styler.label(format_duration(total_duration))
+            self.stdout.write(f'Total duration (rounded): {total_duration_str}')
+            
+            # Calculate the "slack time" based on the target duration and the
+            # total duration of all tasks
+            target_duration = self.get_target_duration()
+            slack_time = max(target_duration - total_duration, 0)
+            if slack_time > 0:
+                slack_time_str = self.styler.warning(format_duration(slack_time))
+            else:
+                slack_time_str = self.styler.label('None! You work too hard.')
+            
+            self.stdout.write(f'Slack time: {slack_time_str}')
         
         problems = journal.problems
         if problems:
