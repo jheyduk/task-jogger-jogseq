@@ -400,14 +400,29 @@ class SeqTask(Task):
         
         self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
         
-        num_tasks = self.styler.label(len(journal.tasks))
-        num_unlogged_tasks = self.styler.label(len(journal.unlogged_tasks))
-        self.stdout.write(f'Found {num_unlogged_tasks} unlogged tasks (out of {num_tasks} total)')
+        show_summary = True
+        show_problems = True
         
-        if not journal.tasks:
+        if journal.is_fully_logged:
+            # All tasks in this journal have been logged to Jira. Give a
+            # summary of totals, but don't report problems (no further actions
+            # can be taken on the journal anyway)
+            self.stdout.write('Journal is fully logged', style='success')
+            show_problems = False
+        elif not journal.tasks:
+            # The journal is either empty or its tasks could not be extracted
+            # for some reason. Don't show a summary (there will be nothing to
+            # include anyway), but show any problems that may have prevented
+            # processing the journal's tasks
             self.stdout.write('Nothing to report', style='warning')
+            show_summary = False
         else:
-            switching_cost = journal._total_switching_cost
+            num_tasks = self.styler.label(len(journal.tasks))
+            num_unlogged_tasks = self.styler.label(len(journal.unlogged_tasks))
+            self.stdout.write(f'Found {num_unlogged_tasks} unlogged tasks (out of {num_tasks} total)')
+        
+        if show_summary:
+            switching_cost = journal.total_switching_cost
             switching_cost_str = self.styler.label(format_duration(switching_cost))
             switching_cost_suffix = ''
             if not journal.catch_all_block:
@@ -415,7 +430,7 @@ class SeqTask(Task):
             
             self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}{switching_cost_suffix}')
             
-            total_duration = journal._total_duration
+            total_duration = journal.total_duration
             total_duration_str = self.styler.label(format_duration(total_duration))
             self.stdout.write(f'Total duration (rounded): {total_duration_str}')
             
@@ -430,11 +445,10 @@ class SeqTask(Task):
             
             self.stdout.write(f'Slack time: {slack_time_str}')
         
-        problems = journal.problems
-        if problems:
+        if show_problems and journal.problems:
             self.stdout.write('')  # blank line
             
-            for level, msg in problems:
+            for level, msg in journal.problems:
                 if level == 'error':
                     styler = self.styler.error
                 elif level == 'warning':
@@ -444,6 +458,15 @@ class SeqTask(Task):
                 
                 prefix = styler(f'[{level.upper()}]')
                 self.stdout.write(f'{prefix} {msg}')
+    
+    def _check_journal_fully_logged(self, journal):
+        
+        if journal.is_fully_logged:
+            self.stdout.write(
+                '\nFully logged journals cannot be processed further',
+                style='warning'
+            )
+            raise Return()
     
     #
     # Menu option handlers
@@ -513,6 +536,8 @@ class SeqTask(Task):
     
     def handle_log_work__submit_worklog(self, journal):
         
+        self._check_journal_fully_logged(journal)
+        
         unlogged_tasks = journal.unlogged_tasks
         
         if not unlogged_tasks:
@@ -542,6 +567,8 @@ class SeqTask(Task):
         self.stdout.write('Not implemented.', style='error')
     
     def handle_log_work__mark_logged(self, journal):
+        
+        self._check_journal_fully_logged(journal)
         
         unlogged_tasks = journal.unlogged_tasks
         
@@ -573,6 +600,8 @@ class SeqTask(Task):
         self.stdout.write(f'\nMarked {num_unlogged} tasks as logged.', style='success')
     
     def handle_log_work__update_journal(self, journal):
+        
+        self._check_journal_fully_logged(journal)
         
         if not journal.tasks:
             self.stdout.write('\nJournal contains no tasks to update', style='warning')

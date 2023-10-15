@@ -622,8 +622,9 @@ class Journal(Block):
         self._problems = None
         self._tasks = None
         
-        self._total_duration = None
-        self._total_switching_cost = None
+        self.is_fully_logged = False
+        self.total_duration = None
+        self.total_switching_cost = None
     
     @property
     def problems(self):
@@ -713,6 +714,9 @@ class Journal(Block):
         self._catch_all_block = None
         self._problems = []
         self._tasks = []
+        self.is_fully_logged = False
+        self.total_duration = None
+        self.total_switching_cost = None
         
         current_block = self
         
@@ -801,22 +805,29 @@ class Journal(Block):
             )))
         
         try:
-            parse_duration_input(self.properties['total-duration'])
+            duration = parse_duration_input(self.properties['total-duration'])
         except ParseError:
             valid = False
             problems.append(('error', (
                 'Invalid "total-duration" property.'
                 ' Expected a duration in human-friendly shorthand.'
             )))
+        else:
+            self.total_duration = duration
         
         try:
-            parse_duration_input(self.properties['switching-cost'])
+            switching_cost = parse_duration_input(self.properties['switching-cost'])
         except ParseError:
             valid = False
             problems.append(('error', (
                 'Invalid "switching-cost" property.'
                 ' Expected a duration in human-friendly shorthand.'
             )))
+        else:
+            self.total_switching_cost = switching_cost
+        
+        # Consider the journal fully logged if all properties are present and valid
+        self.is_fully_logged = valid
         
         return valid
     
@@ -901,8 +912,8 @@ class Journal(Block):
                     'Not included in total duration.'
                 )))
         
-        self._total_switching_cost = total_switching_cost
-        self._total_duration = total_duration
+        self.total_switching_cost = total_switching_cost
+        self.total_duration = total_duration
     
     def mark_all_logged(self):
         
@@ -911,8 +922,8 @@ class Journal(Block):
             task.properties['logged'] = 'true'
         
         # Record total duration and total switching cost as journal properties
-        self.properties['total-duration'] = format_duration(self._total_duration)
-        self.properties['switching-cost'] = format_duration(self._total_switching_cost)
+        self.properties['total-duration'] = format_duration(self.total_duration)
+        self.properties['switching-cost'] = format_duration(self.total_switching_cost)
         
         # Record the current timestamp as the time the journal was logged
         self.properties['time-logged'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
