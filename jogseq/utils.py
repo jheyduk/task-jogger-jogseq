@@ -621,6 +621,9 @@ class Journal(Block):
         self._catch_all_block = None
         self._problems = None
         self._tasks = None
+        
+        self._total_duration = None
+        self._total_switching_cost = None
     
     @property
     def problems(self):
@@ -830,13 +833,21 @@ class Journal(Block):
                     'Not included in total duration.'
                 )))
         
-        # Also add a formatted version of the switching cost as a journal
-        # property for future reference
-        self.properties['switching-cost'] = format_duration(total_switching_cost)
+        self._total_switching_cost = total_switching_cost
+        self._total_duration = total_duration
+    
+    def mark_all_logged(self):
         
-        # Finally, format the total duration and add it as a journal property
-        # for future reference
-        self.properties['total-duration'] = format_duration(total_duration)
+        # Mark all unlogged tasks as logged
+        for task in self.unlogged_tasks:
+            task.properties['logged'] = 'true'
+        
+        # Record total duration and total switching cost as journal properties
+        self.properties['total-duration'] = format_duration(self._total_duration)
+        self.properties['switching-cost'] = format_duration(self._total_switching_cost)
+        
+        # Record the current timestamp as the time the journal was logged
+        self.properties['time-logged'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     def write_back(self):
         """

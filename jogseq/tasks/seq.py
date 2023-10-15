@@ -4,7 +4,7 @@ from os import path
 
 from jogger.tasks import Task
 
-from ..utils import Journal, format_duration, parse_duration_input
+from ..utils import Journal, format_duration
 
 
 def get_task_summary(task, error_styler):
@@ -408,22 +408,22 @@ class SeqTask(Task):
             self.stdout.write('Nothing to report', style='warning')
             return
         
-        switching_cost_str = self.styler.label(journal.properties['switching-cost'])
-        self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}')
+        switching_cost = journal._total_switching_cost
+        switching_cost_str = self.styler.label(format_duration(switching_cost))
+        switching_cost_suffix = ''
+        if not journal.catch_all_block:
+            switching_cost_suffix = self.styler.error(' (unloggable)')
         
-        if journal.catch_all_block:
-            cost_inclusion_str = self.styler.success('(including switching cost)')
-        else:
-            cost_inclusion_str = self.styler.error('(not including switching cost)')
+        self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}{switching_cost_suffix}')
         
-        total_duration = journal.properties['total-duration']
-        total_duration_str = self.styler.label(total_duration)
-        self.stdout.write(f'Total duration (rounded): {total_duration_str} {cost_inclusion_str}')
+        total_duration = journal._total_duration
+        total_duration_str = self.styler.label(format_duration(total_duration))
+        self.stdout.write(f'Total duration (rounded): {total_duration_str}')
         
         # Calculate the "slack time" based on the target duration and the
         # total duration of all tasks
         target_duration = self.get_target_duration()
-        slack_time = max(target_duration - parse_duration_input(total_duration), 0)
+        slack_time = max(target_duration - total_duration, 0)
         if slack_time > 0:
             slack_time_str = self.styler.warning(format_duration(slack_time))
         else:
@@ -568,8 +568,8 @@ class SeqTask(Task):
             self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
         
         num_unlogged = len(unlogged_tasks)
-        for task in unlogged_tasks:
-            task.properties['logged'] = 'true'
+        
+        journal.mark_all_logged()
         
         self.stdout.write(f'\nMarked {num_unlogged} tasks as logged.', style='success')
     
