@@ -940,6 +940,12 @@ class Journal(Block):
         self.total_duration = total_duration
     
     def mark_all_logged(self):
+        """
+        Mark all currently unlogged tasks in the journal (if any) as logged,
+        by adding a ``logged:: true`` property to them. Also add the three
+        core journal properties indicating a fully-logged journal:
+        ``time-logged::``, ``total-duration::``, and ``switching-cost::``.
+        """
         
         # Mark all unlogged tasks as logged
         for task in self.unlogged_tasks:
