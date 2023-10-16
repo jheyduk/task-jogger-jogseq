@@ -502,6 +502,43 @@ class TaskBlock(Block):
         
         self.logbook.insert(0, entry)
     
+    def convert_time_property(self, date):
+        """
+        Convert any ``time::`` property on the task into a logbook entry,
+        using the given ``date``. This allows manual task durations to be
+        subsequently treated as per regular logbook durations, i.e. contribute
+        to the same totals, etc.
+        
+        Logbook entries created from ``time::`` properties are inserted at the
+        beginning of the logbook, using fake timestamps. The duration is the
+        important part.
+        
+        Has no effect on tasks witout a ``time::`` property.
+        
+        :param date: The date on which the logbook entry should be made.
+        """
+        
+        if 'time' not in self.properties:
+            return
+        
+        time_value = self.properties['time']
+        
+        # If the value isn't a valid duration string, leave the property in
+        # place as a flag that the task isn't valid to be logged. Otherwise
+        # remove it and replace it with a logbook entry.
+        try:
+            time_value = parse_duration_input(time_value)
+        except ParseError:
+            pass
+        else:
+            del self.properties['time']
+            
+            # Manually-entered times are likely to be rounded already, but
+            # just in case...
+            time_value = round_duration(time_value)
+            
+            self.add_to_logbook(date, time_value)
+    
     def validate(self):
         """
         Validate the task's content and return a dictionary of errors, if any.
@@ -860,25 +897,7 @@ class Journal(Block):
             # Perform some extra processing for tasks that aren't yet logged
             if 'logged' not in task.properties:
                 # Convert any time:: properties to logbook entries
-                if 'time' in task.properties:
-                    time_value = task.properties['time']
-                    
-                    # If the value isn't a valid duration string, leave the
-                    # property in place as a flag that the task isn't valid to
-                    # be logged. Otherwise remove it and replace it with a
-                    # logbook entry.
-                    try:
-                        time_value = parse_duration_input(time_value)
-                    except ParseError:
-                        pass
-                    else:
-                        del task.properties['time']
-                        
-                        # Manually-entered times are likely to be rounded
-                        # already, but just in case...
-                        time_value = round_duration(time_value)
-                        
-                        task.add_to_logbook(date, time_value)
+                task.convert_time_property(date)
                 
                 # Add any errors with the task definition to the journal's
                 # overall list of problems

@@ -53,6 +53,15 @@ class Return(Exception):
         self.ttl = ttl
         
         super().__init__()
+    
+    def decrement_ttl(self):
+        """
+        Propagate (i.e. re-raise) the exception with a reduced TTL, unless the
+        TTL has already expired.
+        """
+        
+        if self.ttl:
+            raise Return(ttl=self.ttl - 1)
 
 
 class Menu(dict):
@@ -310,11 +319,9 @@ class SeqTask(Task):
                 handler(*args)
             except Return as e:
                 # The handler's process was interrupted in order to return
-                # to a menu. If it's TTL has not reached 0, re-raise the
-                # exception (with a decremented TTL) in order to return to
-                # a higher level menu.
-                if e.ttl:
-                    raise Return(ttl=e.ttl - 1)
+                # to a menu. Potentially re-raise the exception if it has a
+                # non-zero TTL, indicating a return to a higher-level menu.
+                e.decrement_ttl()
     
     def show_confirmation_prompt(self, prompt):
         """
