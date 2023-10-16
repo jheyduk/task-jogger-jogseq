@@ -648,12 +648,13 @@ class Journal(Block):
     additional logbook entries, etc.
     """
     
-    def __init__(self, graph_path, date):
+    def __init__(self, graph_path, date, switching_scale):
         
         super().__init__(indent=-1, content='', parent=None)
         
         self.date = date
         self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
+        self.switching_scale = switching_scale
         
         self._catch_all_block = None
         self._problems = None
@@ -734,14 +735,11 @@ class Journal(Block):
         
         return [t for t in self.tasks if 'logged' not in t.properties]
     
-    def parse(self, switching_cost):
+    def parse(self):
         """
         Using the journal's configured base graph path and date, locate and
         parse the markdown file for the matching Logseq journal entry. Parsing
         this file populates the journal's attributes with the parsed data.
-        
-        :param switching_cost: A ``SwitchingCost`` object for calculating
-            estimated context switching costs per task, based on their duration.
         """
         
         # In the event of re-parsing the journal, reset all relevant attributes
@@ -794,7 +792,7 @@ class Journal(Block):
         valid = self._validate_properties()
         
         if valid:
-            self._process_tasks(switching_cost)
+            self._process_tasks()
     
     def _validate_properties(self):
         """
@@ -868,7 +866,7 @@ class Journal(Block):
         
         return valid
     
-    def _process_tasks(self, switching_cost):
+    def _process_tasks(self):
         """
         Process the tasks present in the journal, performing several
         calculations and transformations:
@@ -892,6 +890,7 @@ class Journal(Block):
         
         total_duration = 0
         total_switching_cost = 0
+        switching_scale = self.switching_scale
         
         for task in all_tasks:
             # Perform some extra processing for tasks that aren't yet logged
@@ -920,7 +919,7 @@ class Journal(Block):
             # point, as the total switching cost will be rounded at the end
             # and added to the total duration then.
             if task is not catch_all_block:
-                total_switching_cost += switching_cost.for_duration(task_duration)
+                total_switching_cost += switching_scale.for_duration(task_duration)
         
         if total_switching_cost > 0:
             # Round the switching cost and add it to the journal's total duration

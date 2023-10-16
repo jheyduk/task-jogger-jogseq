@@ -115,7 +115,7 @@ class Menu(dict):
         return super().__getitem__(key)
 
 
-class SwitchingCost:
+class SwitchingCostScale:
     """
     Helper object for containing scaling switching cost details and calculating
     estimated switching costs for given task durations.
@@ -233,7 +233,7 @@ class SeqTask(Task):
     
     def verify_config(self):
         
-        # Verify graph_path
+        # Verify `graph_path` setting
         try:
             graph_path = self.settings['graph_path']
         except KeyError:
@@ -244,7 +244,7 @@ class SeqTask(Task):
             self.stderr.write('Invalid config: Graph path does not exist.')
             raise SystemExit(1)
         
-        # Verify target_duration
+        # Verify `target_duration` setting
         invalid_duration_msg = 'Invalid config: Target duration must be a positive number of minutes.'
         
         try:
@@ -257,9 +257,9 @@ class SeqTask(Task):
             self.stderr.write(invalid_duration_msg)
             raise SystemExit(1)
         
-        # Verify switching_cost
+        # Verify `switching_cost` setting
         try:
-            self.get_switching_cost()
+            self.get_switching_scale()
         except ValueError as e:
             self.stderr.write(str(e))
             raise SystemExit(1)
@@ -364,13 +364,13 @@ class SeqTask(Task):
         if not journal and not date:
             raise TypeError('One of "journal" or "date" must be provided.')
         
-        if not journal:
-            journal = Journal(self.settings['graph_path'], date)
+        switching_scale = self.get_switching_scale()
         
-        switching_cost = self.get_switching_cost()
+        if not journal:
+            journal = Journal(self.settings['graph_path'], date, switching_scale)
         
         try:
-            journal.parse(switching_cost)
+            journal.parse()
         except FileNotFoundError:
             self.stdout.write(f'No journal found for {journal.date}', style='error')
             return None
@@ -389,15 +389,15 @@ class SeqTask(Task):
         
         return duration * 60  # convert from minutes to seconds
     
-    def get_switching_cost(self):
+    def get_switching_scale(self):
         """
-        Return a ``SwitchingCost`` object for the calculation of estimated
+        Return a ``SwitchingCostScale`` object for the calculation of estimated
         switching costs based on task durations.
         """
         
         cost_setting = self.settings.get('switching_cost', self.DEFAULT_SWITCHING_COST)
         
-        return SwitchingCost(cost_setting, self.SWITCHING_COST_DURATION_RANGE)
+        return SwitchingCostScale(cost_setting, self.SWITCHING_COST_DURATION_RANGE)
     
     def show_journal_summary(self, journal):
         """
