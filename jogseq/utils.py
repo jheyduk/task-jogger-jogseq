@@ -857,29 +857,42 @@ class Journal(Block):
         total_switching_cost = 0
         
         for task in all_tasks:
-            # Convert any time:: properties to logbook entries
-            if 'time' in task.properties:
-                time_value = task.properties['time']
+            # Perform some extra processing for tasks that aren't yet logged
+            if 'logged' not in task.properties:
+                # Convert any time:: properties to logbook entries
+                if 'time' in task.properties:
+                    time_value = task.properties['time']
+                    
+                    # If the value isn't a valid duration string, leave the
+                    # property in place as a flag that the task isn't valid to
+                    # be logged. Otherwise remove it and replace it with a
+                    # logbook entry.
+                    try:
+                        time_value = parse_duration_input(time_value)
+                    except ParseError:
+                        pass
+                    else:
+                        del task.properties['time']
+                        
+                        # Manually-entered times are likely to be rounded
+                        # already, but just in case...
+                        time_value = round_duration(time_value)
+                        
+                        task.add_to_logbook(date, time_value)
                 
-                # If the value isn't a valid duration string, leave the
-                # property in place as a flag that the task isn't valid to
-                # be logged. Otherwise remove it and replace it with a
-                # logbook entry.
-                try:
-                    time_value = parse_duration_input(time_value)
-                except ParseError:
-                    pass
-                else:
-                    del task.properties['time']
-                    
-                    # Manually-entered times are likely to be rounded already,
-                    # but just in case...
-                    time_value = round_duration(time_value)
-                    
-                    task.add_to_logbook(date, time_value)
+                # Add any errors with the task definition to the journal's
+                # overall list of problems
+                errors = task.validate()
+                for messages in errors.values():
+                    for msg in messages:
+                        problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
             
-            # Taking into account any converted time:: properties, calculate
-            # the task's duration and add it to the journal's total duration
+            # Regardless of whether the task is logged or not, still include
+            # it in totals calculations
+            
+            # Taking into account any above-converted time:: properties,
+            # calculate the task's duration and add it to the journal's
+            # total duration
             task_duration = task.get_total_duration()
             total_duration += task_duration
             
@@ -889,13 +902,6 @@ class Journal(Block):
             # and added to the total duration then.
             if task is not catch_all_block:
                 total_switching_cost += switching_cost.for_duration(task_duration)
-            
-            # Add any errors with the task definition to the journal's overall
-            # list of problems
-            errors = task.validate()
-            for messages in errors.values():
-                for msg in messages:
-                    problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
         
         if total_switching_cost > 0:
             # Round the switching cost and add it to the journal's total duration
