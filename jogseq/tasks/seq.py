@@ -432,7 +432,7 @@ class SeqTask(Task):
             switching_cost = journal.total_switching_cost
             switching_cost_str = self.styler.label(format_duration(switching_cost))
             switching_cost_suffix = ''
-            if not journal.catch_all_block:
+            if not journal.misc_task:
                 switching_cost_suffix = self.styler.error(' (unloggable)')
             
             self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}{switching_cost_suffix}')

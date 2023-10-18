@@ -639,9 +639,9 @@ class Journal(Block):
     * Calculating the total estimated context switching cost of the journal's
       tasks, based on the duration of those tasks and a given sliding scale of
       per-task switching costs.
-    * Tracking an optional "catch-all" task, to which the estimated context
-      switching cost can be logged. Only a single catch-all task can exist per
-      journal.
+    * Tracking an optional "miscellaneous" task, to which the estimated context
+      switching cost can be logged. Only a single miscellaneous task can exist
+      per journal.
     
     Journals can also write back to their markdown file, persisting any changes
     made to the journal and its child blocks, including added properties,
@@ -656,7 +656,7 @@ class Journal(Block):
         self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
         self.switching_scale = switching_scale
         
-        self._catch_all_block = None
+        self._misc_task = None
         self._problems = None
         self._tasks = None
         
@@ -678,33 +678,33 @@ class Journal(Block):
         return self._problems
     
     @property
-    def catch_all_block(self):
+    def misc_task(self):
         """
         A special task block to which the estimated context switching cost
         can be logged.
         """
         
-        if self._catch_all_block is not None:
-            return self._catch_all_block
+        if self._misc_task is not None:
+            return self._misc_task
         
         problems = self._problems
         if problems is None:
             raise Exception('Journal not parsed.')
         
-        matches = find_by_property(self, 'catch-all')
+        matches = find_by_property(self, 'misc')
         
         if not matches:
             return None
         
         if len(matches) > 1:
             problems.append(('warning', (
-                'Only a single catch-all block is supported per journal. '
-                'Subsequent catch-all blocks have no effect.'
+                'Only a single miscellaneous block is supported per journal. '
+                'Subsequent miscellaneous blocks have no effect.'
             )))
         
-        self._catch_all_block = matches[0]
+        self._misc_task = matches[0]
         
-        return self._catch_all_block
+        return self._misc_task
     
     @property
     def tasks(self):
@@ -746,7 +746,7 @@ class Journal(Block):
         self.properties = {}
         self.continuation_lines = []
         self.children = []
-        self._catch_all_block = None
+        self._misc_task = None
         self._problems = []
         self._tasks = []
         self.is_fully_logged = False
@@ -886,7 +886,7 @@ class Journal(Block):
         
         problems = self._problems
         all_tasks = self._tasks = find_tasks(self)
-        catch_all_block = self.catch_all_block
+        misc_task = self.misc_task
         
         total_duration = 0
         total_switching_cost = 0
@@ -914,11 +914,11 @@ class Journal(Block):
             task_duration = task.get_total_duration()
             total_duration += task_duration
             
-            # Also calculate the task's switching cost, ignoring the catch-all
-            # task, if any. Do NOT add to the journal's total duration at this
-            # point, as the total switching cost will be rounded at the end
-            # and added to the total duration then.
-            if task is not catch_all_block:
+            # Also calculate the task's switching cost, ignoring the misc task,
+            # if any. Do NOT add to the journal's total duration at this point,
+            # as the total switching cost will be rounded at the end and added
+            # to the total duration then.
+            if task is not misc_task:
                 total_switching_cost += switching_scale.for_duration(task_duration)
         
         if total_switching_cost > 0:
@@ -926,15 +926,15 @@ class Journal(Block):
             total_switching_cost = round_duration(total_switching_cost)
             total_duration += total_switching_cost
             
-            # Add the estimated switching cost to the catch-all task's logbook,
+            # Add the estimated switching cost to the misc task's logbook,
             # if any, so it can be allocated to a relevant task
-            if catch_all_block:
-                catch_all_block.add_to_logbook(date, total_switching_cost)
+            if misc_task:
+                misc_task.add_to_logbook(date, total_switching_cost)
             else:
-                problems.insert(0, ('warning', (
-                    'No catch-all task found to log context switching cost against. '
-                    'Not included in total duration.'
-                )))
+                problems.insert(0, (
+                    'warning',
+                    'No miscellaneous task found to log context switching cost against.'
+                ))
         
         self.total_switching_cost = total_switching_cost
         self.total_duration = total_duration
