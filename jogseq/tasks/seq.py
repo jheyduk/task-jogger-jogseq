@@ -4,7 +4,22 @@ from os import path
 
 from jogger.tasks import Task
 
-from ..utils import Journal, format_duration
+from ..utils import DurationContext, Journal, format_duration
+
+
+def set_duration_interval(interval):
+    
+    try:
+        interval = int(interval)
+    except ValueError:
+        pass
+    
+    if interval == 1:
+        DurationContext.rounding_interval = DurationContext.ONE_MINUTE
+    elif interval == 5:
+        DurationContext.rounding_interval = DurationContext.FIVE_MINUTES
+    else:
+        raise ValueError('Duration interval must be either 1 or 5.')
 
 
 def get_task_summary(task, error_styler):
@@ -244,17 +259,18 @@ class SeqTask(Task):
             self.stderr.write('Invalid config: Graph path does not exist.')
             raise SystemExit(1)
         
-        # Verify `target_duration` setting
-        invalid_duration_msg = 'Invalid config: Target duration must be a positive number of minutes.'
-        
+        # Verify `duration_interval` setting
         try:
-            duration = self.get_target_duration()
-        except ValueError:
-            self.stderr.write(invalid_duration_msg)
+            set_duration_interval(self.settings.get('duration_interval', 1))
+        except ValueError as e:
+            self.stderr.write(f'Invalid config: {e}')
             raise SystemExit(1)
         
-        if duration < 0:
-            self.stderr.write(invalid_duration_msg)
+        # Verify `target_duration` setting
+        try:
+            self.get_target_duration()
+        except ValueError as e:
+            self.stderr.write(f'Invalid config: {e}')
             raise SystemExit(1)
         
         # Verify `switching_cost` setting
@@ -385,7 +401,13 @@ class SeqTask(Task):
         Return the configured target duration in seconds.
         """
         
-        duration = int(self.settings.get('target_duration', self.DEFAULT_TARGET_DURATION))
+        try:
+            duration = int(self.settings.get('target_duration', self.DEFAULT_TARGET_DURATION))
+        except ValueError:
+            duration = 0
+        
+        if duration <= 0:
+            raise ValueError('Target duration must be a positive number of minutes.')
         
         return duration * 60  # convert from minutes to seconds
     
