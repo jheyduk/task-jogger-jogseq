@@ -16,6 +16,21 @@ LINK_RE = re.compile(r'\[\[(.*?)\]\]')
 BLOCK_CONTENT_TRIM_LENGTH = 50
 
 
+class DurationContext:
+    """
+    An object containing context around how duration-related operations should
+    be performed. The context can be updated to affect the operations globally.
+    """
+    
+    # Possible rounding intervals. Each interval is a two-tuple of the
+    # interval in seconds, and the number of seconds into the next interval
+    # that a duration must be before it is rounded up.
+    ONE_MINUTE = (60, 30)
+    FIVE_MINUTES = (300, 90)
+    
+    rounding_interval = FIVE_MINUTES
+
+
 def parse_duration_timestamp(timestamp_str):
     """
     Return the number of seconds represented by the given duration timestamp
@@ -60,18 +75,15 @@ def parse_duration_input(input_str):
 
 def round_duration(total_seconds):
     """
-    Round the given number of seconds to the most appropriate 5-minute interval
-    and return the new value in seconds. This usually means rounding up to the
-    next 5-minute interval, but the value will be rounded down if:
-    
-    * it is not 0 (any value over 0 is rounded up to 300, at least)
-    * it is less than 90 seconds into the next interval
+    Round the given number of seconds as dictated by ``DurationContext`` and
+    return the new value in seconds. Values will never be rounded down to 0,
+    and values that are already 0 will never be rounded up.
     
     :param total_seconds: The duration to round, in seconds.
     :return: The rounded value, in seconds.
     """
     
-    interval = 60 * 5  # 5 minutes
+    interval, rounding_point = DurationContext.rounding_interval
     
     # If a zero duration, report it as such. But for other durations less
     # than the interval, report the interval as a minimum instead.
@@ -80,13 +92,13 @@ def round_duration(total_seconds):
     elif total_seconds < interval:
         return interval
     
-    # Round to the most appropriate 5-minute interval
+    # Round to the most appropriate interval
     base, remainder = divmod(total_seconds, interval)
     
     duration = interval * base
     
-    # If more than 90 seconds into the next interval, round up
-    if remainder > 90:
+    # Round up if the remainder is at or over the rounding point
+    if remainder >= rounding_point:
         duration += interval
     
     return duration
@@ -115,7 +127,7 @@ def format_duration(total_seconds):
         parts.append(f'{seconds}s')
     
     if not parts:
-        # The most common unit is minutes, so for durations of sero, report
+        # The most common unit is minutes, so for durations of zero, report
         # it as 0 minutes.
         return '0m'
     
@@ -532,11 +544,6 @@ class TaskBlock(Block):
             pass
         else:
             del self.properties['time']
-            
-            # Manually-entered times are likely to be rounded already, but
-            # just in case...
-            time_value = round_duration(time_value)
-            
             self.add_to_logbook(date, time_value)
     
     def validate(self):
