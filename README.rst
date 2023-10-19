@@ -32,13 +32,14 @@ Configuration
 The following optional configuration options are also available (see `Features`_ for details on how and when to use them):
 
 * ``duration_interval``: The interval to round task durations to, in minutes. Defaults to ``5``. Valid options are ``5`` and ``1``.
-* ``target_duration``: The target total duration for each daily journal, in minutes. The durations of all tasks in the journal, plus the calculated switching cost as per the above, will be compared to this figure and the difference, if any, will be reported. Defaults to ``420`` (7 hours).
 * ``switching_cost``: The estimated cost of context switching between tasks, in minutes. By default, no switching cost will be calculated. If specified, it should be a range that spans no more than 30 minutes, e.g. ``1-15``. The switching cost per task will be based on that task's duration - the longer the task, the higher the switching cost. Any task longer than an hour will use the maximum switching cost. To use a fixed switching cost per task, specify the same value for both ends of the range, e.g. ``5-5``.
+* ``target_duration``: The target total duration for each daily journal, in minutes. The durations of all tasks in the journal, plus the calculated switching cost as per the above, will be compared to this figure and the difference, if any, will be reported. Defaults to ``420`` (7 hours).
 
 The following is a sample config file showing example configurations for the above::
 
     [jogger:seq]
     graph_path = /home/myuser/mygraph/
+    duration_interval = 1
     switching_cost = 1-15
     target_duration = 450
 
@@ -73,7 +74,7 @@ Assumptions
 
 For logging work to Jira, the following assumptions apply:
 
-* Tasks use the ``NOW`` / ``LATER`` workflow rather than ``TODO`` / ``DOING``. This allows for ``TODO`` tasks to be nested under ``NOW`` / ``LATER`` blocks as placeholder tasks to be completed at a later date, and not logged as part of the current journal.
+* Task blocks use the ``NOW`` / ``LATER`` workflow rather than ``TODO`` / ``DOING``. This allows for ``TODO`` tasks to be nested under ``NOW`` / ``LATER`` blocks as placeholder tasks to be completed at a later date, and not logged as part of the current journal.
 * ``NOW`` / ``LATER`` tasks cannot be nested within each other. This prevents ambiguity when determining the total duration of a task (does logged time apply to the parent or child task?). Nesting tasks under regular blocks is fine, as is nesting regular blocks under tasks (they will be included in the worklog description).
 * The Jira issue ID of a task must be the second token in the block (after ``NOW`` / ``LATER``). Following it with a colon is optional, and using link syntax is supported. For example::
     

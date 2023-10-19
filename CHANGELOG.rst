@@ -1,7 +1,7 @@
 Change Log
 ==========
 
-0.1.0 (unreleased)
+0.1.0 (2023-10-20)
 ------------------
 
 * Added ``SeqTask`` with initial support for parsing Logseq journals and extracting worklog info
