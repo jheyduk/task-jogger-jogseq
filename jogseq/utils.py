@@ -2,11 +2,25 @@ import datetime
 import os
 import re
 
+# Recognise a task block as one starting with the keyword "NOW" or "LATER",
+# followed by a space, at the beginning of the line. The keyword can optionally
+# be preceeded by any number of hashes, representing the task's heading level.
+TASK_BLOCK_RE = re.compile(r'^\- (\#+ )?(NOW|LATER) ')
+
+# Recognise a "todo" block as one starting with the keyword "TODO" or "DONE",
+# followed by a space, at the beginning of the line. The keyword can optionally
+# be preceeded by any number of hashes, representing the task's heading level.
+TODO_BLOCK_RE = re.compile(r'^\- (\#+ )?(TODO|DONE) ')
+
 # Recognise task IDs as one or more letters, followed by a hyphen, followed
 # by one or more digits. The ID may optionally be wrapped in double square
 # brackets, and optionally be followed by a colon.
 # E.g. "ABC-123", "ABC-123:", "[[ABC-123]]", "[[ABC-123]]:"
 TASK_ID_RE = re.compile(r'^(\[{2})?([A-Z]+-\d+)(\]{2})?:?$')
+
+# Recognise heading styles as any number of hashes, followed by a space,
+# at the beginning of the line
+HEADING_RE = re.compile(r'^\#+ ')
 
 # Recognise page links as any text wrapped in double square brackets
 LINK_RE = re.compile(r'\[\[(.*?)\]\]')
@@ -140,6 +154,9 @@ def sanitise(content):
     Logseq-specific formatting elements.
     """
     
+    # Remove heading styles
+    content = HEADING_RE.sub('', content)
+    
     # Remove links (wrapping double square brackets)
     content = LINK_RE.sub(r'\1', content)
     
@@ -192,9 +209,9 @@ def get_block_class(content):
     """
     
     block_cls = Block
-    if content.startswith('- NOW ') or content.startswith('- LATER '):
+    if TASK_BLOCK_RE.match(content):
         block_cls = TaskBlock
-    elif content.startswith('- TODO ') or content.startswith('- DONE '):
+    elif TODO_BLOCK_RE.match(content):
         block_cls = TodoBlock
     
     return block_cls
@@ -440,9 +457,13 @@ class TaskBlock(Block):
         
         super().__init__(*args, **kwargs)
         
+        # For the purposes of the below parsing, ignore any heading styles
+        # that may be present
+        content = HEADING_RE.sub('', self.content)
+        
         # Split content into keyword (e.g. LATER), task ID, and any optional
         # remaining content
-        keyword, *remainder = self.content.split(' ', 2)
+        keyword, *remainder = content.split(' ', 2)
         
         # At least one item in the remainder should always exist, because
         # TaskBlocks are only created if a matching keyword *followed by a
