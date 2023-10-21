@@ -4,7 +4,7 @@ from os import path
 
 from jogger.tasks import Task
 
-from ..utils import DurationContext, Journal, format_duration
+from ..utils.blocks import DurationContext, Journal, format_duration
 
 
 def set_duration_interval(interval):
