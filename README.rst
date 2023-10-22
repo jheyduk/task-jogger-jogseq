@@ -23,8 +23,8 @@ The latest stable version of ``jogseq`` can be installed from PyPI::
 
 The following dependencies will also be installed:
 
-* ``jogger``: The underlying task running system that ``jogseq`` is built on. See: `https://github.com/oogles/task-jogger`_.
-* ``jira``: A Python API package for Jira. See: `https://github.com/pycontribs/jira`_.
+* ``jogger``: The underlying task running system that ``jogseq`` is built on. See: https://github.com/oogles/task-jogger.
+* ``jira``: A Python API package for Jira. See: https://github.com/pycontribs/jira.
 
 
 Configuration
@@ -49,6 +49,11 @@ The following is a sample config file showing example configurations for the abo
 
     [jogger:seq]
     graph_path = /home/myuser/mygraph/
+    
+    jira_url = https://mycompany.atlassian.net
+    jira_user = alex@church.id.au
+    jira_api_token = <token_string>
+
     duration_interval = 1
     switching_cost = 1-15
     target_duration = 450
