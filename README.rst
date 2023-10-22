@@ -51,7 +51,7 @@ The following is a sample config file showing example configurations for the abo
     graph_path = /home/myuser/mygraph/
     
     jira_url = https://mycompany.atlassian.net
-    jira_user = alex@church.id.au
+    jira_user = me@example.com
     jira_api_token = <token_string>
 
     duration_interval = 1
