@@ -1,7 +1,9 @@
 import datetime
 import math
+from getpass import getpass
 from os import path
 
+from jira import JIRA, JIRAError
 from jogger.tasks import Task
 
 from ..utils.blocks import DurationContext, Journal, format_duration
@@ -235,6 +237,8 @@ class SeqTask(Task):
         
         self.verify_config()
         
+        self.api = self.configure_api()
+        
         try:
             self.show_menu(
                 '\nChoose one of the following commands to execute:',
@@ -279,6 +283,42 @@ class SeqTask(Task):
         except ValueError as e:
             self.stderr.write(str(e))
             raise SystemExit(1)
+    
+    def configure_api(self):
+        
+        self.stdout.write('Connecting to Jira API...', style='label')
+        
+        # The URL and user are required settings
+        try:
+            jira_url = self.settings['jira_url']
+            jira_user = self.settings['jira_user']
+        except KeyError:
+            self.stderr.write('Invalid config: Jira URL and/or user missing.')
+            raise SystemExit(1)
+        
+        # The API token is optional. If not provided, prompt the user for it.
+        jira_api_token = self.settings.get('jira_api_token', None)
+        while not jira_api_token:
+            jira_api_token = getpass('Jira API token: ')
+        
+        api = JIRA(jira_url, basic_auth=(jira_user, jira_api_token))
+        
+        try:
+            user_details = api.myself()
+        except JIRAError as e:
+            if e.status_code == 401:
+                self.stderr.write('Invalid Jira credentials.')
+            else:
+                self.stderr.write(f'Error connecting to Jira: {e}')
+            
+            raise SystemExit(1)
+        
+        user_name = user_details['displayName']
+        user_email = user_details['emailAddress']
+        
+        self.stdout.write(f'Connected as: {user_name} ({user_email})', style='success')
+        
+        return api
     
     def show_menu(self, intro, return_option, *other_options):
         """

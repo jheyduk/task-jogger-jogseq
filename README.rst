@@ -17,20 +17,30 @@ Also be sure to check out the `assumptions it makes <#assumptions>`_ and assess 
 Installation
 ============
 
-Being a plugin for ``jogger``, ``jogseq`` requires ``jogger`` itself also be installed.
-
-The latest stable versions of both can be installed from PyPI::
+The latest stable version of ``jogseq`` can be installed from PyPI::
 
     pip install task-jogger task-jogger-jogseq
+
+The following dependencies will also be installed:
+
+* ``jogger``: The underlying task running system that ``jogseq`` is built on. See: `https://github.com/oogles/task-jogger`_.
+* ``jira``: A Python API package for Jira. See: `https://github.com/pycontribs/jira`_.
 
 
 Configuration
 =============
 
-``jogseq`` requires the path to your Logseq graph to be configured before it can be used. This is done via the ``graph_path`` setting in a suitable ``jogger`` `config file <https://task-jogger.readthedocs.io/en/stable/topics/config.html>`_.
+``jogseq`` can be configured using `any compatible config file <https://task-jogger.readthedocs.io/en/stable/topics/config.html>`_ recognised by ``jogger``.
 
-The following optional configuration options are also available (see `Features`_ for details on how and when to use them):
+The following settings are required:
 
+* ``graph_path``: The path to your Logseq graph. This should be the root directory of your graph, i.e. the directory containing the ``pages`` and ``journal`` directories.
+* ``jira_url``: The URL of your Jira instance. E.g. ``https://mycompany.atlassian.net``.
+* ``jira_user``: Your Jira username/email address.
+
+The following optional settings are also available (see `Features`_ for details on how and when to use them):
+
+* ``jira_api_token``: Your `Jira API token <https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/>`_. If not specified, you will be prompted for it when the program is launched. While using this setting adds convenience by avoiding the prompt on every launch, it is less secure as it requires storing the token in plain text.
 * ``duration_interval``: The interval to round task durations to, in minutes. Defaults to ``5``. Valid options are ``5`` and ``1``.
 * ``switching_cost``: The estimated cost of context switching between tasks, in minutes. By default, no switching cost will be calculated. If specified, it should be a range that spans no more than 30 minutes, e.g. ``1-15``. The switching cost per task will be based on that task's duration - the longer the task, the higher the switching cost. Any task longer than an hour will use the maximum switching cost. To use a fixed switching cost per task, specify the same value for both ends of the range, e.g. ``5-5``.
 * ``target_duration``: The target total duration for each daily journal, in minutes. The durations of all tasks in the journal, plus the calculated switching cost as per the above, will be compared to this figure and the difference, if any, will be reported. Defaults to ``420`` (7 hours).
