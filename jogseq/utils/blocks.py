@@ -2,21 +2,22 @@ import datetime
 import os
 import re
 
-# Recognise a task block as one starting with the keyword "NOW" or "LATER",
-# followed by a space, at the beginning of the line. The keyword can optionally
-# be preceeded by any number of hashes, representing the task's heading level.
-TASK_BLOCK_RE = re.compile(r'^\- (\#+ )?(NOW|LATER) ')
-
-# Recognise a "todo" block as one starting with the keyword "TODO" or "DONE",
-# followed by a space, at the beginning of the line. The keyword can optionally
-# be preceeded by any number of hashes, representing the task's heading level.
-TODO_BLOCK_RE = re.compile(r'^\- (\#+ )?(TODO|DONE) ')
-
 # Recognise task IDs as one or more letters, followed by a hyphen, followed
 # by one or more digits. The ID may optionally be wrapped in double square
 # brackets, and optionally be followed by a colon.
 # E.g. "ABC-123", "ABC-123:", "[[ABC-123]]", "[[ABC-123]]:"
-TASK_ID_RE = re.compile(r'^(\[{2})?([A-Z]+-\d+)(\]{2})?:?$')
+_task_id_re = r'(\[{2})?([A-Z]+-\d+)(\]{2})?:?'
+TASK_ID_RE = re.compile(fr'^{_task_id_re}$')
+
+# Recognise a "task block" as one starting with a keyword ("NOW", "LATER",
+# "TODO", "DOING", or "DONE"), followed by a space, at the beginning of the
+# line. The keyword can optionally be preceeded by any number of hashes,
+# representing the task's heading level.
+TASK_BLOCK_RE = re.compile(r'^\- (\#+ )?(NOW|LATER|TODO|DOING|DONE) ')
+
+# An an extension of a "task block", recognise an "issue block" using the same
+# rules, but also containing a Jira issue ID.
+ISSUE_BLOCK_RE = re.compile(fr'^\- (\#+ )?(NOW|LATER|TODO|DOING|DONE) {_task_id_re}')
 
 # Recognise heading styles as any number of hashes, followed by a space,
 # at the beginning of the line
@@ -163,21 +164,21 @@ def sanitise(content):
     return content
 
 
-def find_tasks(block):
+def find_issue_blocks(block):
     """
-    Return a list of the tasks nested under the given ``Block`` instance,
-    by recursively iterating through its children.
+    Return a list of the "issue blocks" nested under the given ``Block``
+    instance, by recursively iterating through its children.
     
     :param block: The ``Block`` instance.
-    :return: The list of found ``TaskBlock`` instances.
+    :return: The list of found ``IssueBlock`` instances.
     """
     
     tasks = []
     for child in block.children:
-        if isinstance(child, TaskBlock):
+        if isinstance(child, IssueBlock):
             tasks.append(child)
         
-        tasks.extend(find_tasks(child))
+        tasks.extend(find_issue_blocks(child))
     
     return tasks
 
@@ -209,10 +210,10 @@ def get_block_class(content):
     """
     
     block_cls = Block
-    if TASK_BLOCK_RE.match(content):
+    if ISSUE_BLOCK_RE.match(content):
+        block_cls = IssueBlock
+    elif TASK_BLOCK_RE.match(content):
         block_cls = TaskBlock
-    elif TODO_BLOCK_RE.match(content):
-        block_cls = TodoBlock
     
     return block_cls
 
@@ -427,12 +428,12 @@ class Block:
         return lines
 
 
-class TodoBlock(Block):
+class TaskBlock(Block):
     
     is_simple_block = False
 
 
-class TaskBlock(Block):
+class IssueBlock(Block):
     """
     A parsed Logseq task - a special kind of block that represents a job to
     be worked on. Tasks are denoted by their content beginning with a keyword
@@ -466,7 +467,7 @@ class TaskBlock(Block):
         keyword, *remainder = content.split(' ', 2)
         
         # At least one item in the remainder should always exist, because
-        # TaskBlocks are only created if a matching keyword *followed by a
+        # IssueBlocks are only created if a matching keyword *followed by a
         # space* is found at the start of the line's content
         task_id = remainder[0]
         if TASK_ID_RE.match(task_id):
@@ -489,10 +490,9 @@ class TaskBlock(Block):
     @property
     def sanitised_content(self):
         
-        # The sanitised version of a TaskBlock's content is just the description
-        # portion, not the whole line. If the task doesn't have a description,
-        # use its parent's sanitised content instead.
-        # TODO: Move this functionality behind a setting?
+        # The sanitised version of a IssueBlock's content is just the
+        # description portion, not the whole line. If the task doesn't
+        # have a description, use its parent's sanitised content instead.
         description = self.description
         if not description:
             description = self.parent.sanitised_content
@@ -598,13 +598,13 @@ class TaskBlock(Block):
             errors[error_type].append(error)
         
         # Ensure the task's timer isn't currently running
-        if self.keyword == 'NOW':
+        if self.keyword in ('NOW', 'DOING'):
             add_error('keyword', 'Running timer detected')
         
         # Ensure the task is not a child of another task
         p = self.parent
         while p:
-            if isinstance(p, TaskBlock):
+            if isinstance(p, IssueBlock):
                 add_error('keyword', 'Nested task detected')
                 break
             
@@ -913,7 +913,7 @@ class Journal(Block):
         date = self.date
         
         problems = self._problems
-        all_tasks = self._tasks = find_tasks(self)
+        all_tasks = self._tasks = find_issue_blocks(self)
         misc_task = self.misc_task
         
         total_duration = 0
