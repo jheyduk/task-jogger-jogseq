@@ -28,12 +28,12 @@ def get_task_summary(task, error_styler):
     
     errors = task.validate()
     
-    task_id = task.task_id
-    if not task_id:
-        task_id = '???'
+    issue_id = task.issue_id
+    if not issue_id:
+        issue_id = '???'
     
-    if 'task_id' in errors and 'keyword' not in errors:
-        task_id = error_styler(task_id)
+    if 'issue_id' in errors and 'keyword' not in errors:
+        issue_id = error_styler(issue_id)
     
     duration = task.get_total_duration()
     if not duration:
@@ -44,7 +44,7 @@ def get_task_summary(task, error_styler):
     if 'duration' in errors and 'keyword' not in errors:
         duration = error_styler(duration)
     
-    output = f'{task_id}: {duration}'
+    output = f'{issue_id}: {duration}'
     description = task.sanitised_content
     if description:
         output = f'{output}; {description}'
@@ -473,16 +473,16 @@ class SeqTask(Task):
         show_problems = True
         
         if journal.is_fully_logged:
-            # All tasks in this journal have been logged to Jira. Give a
-            # summary of totals, but don't report problems (no further actions
-            # can be taken on the journal anyway)
+            # All worklog blocks in this journal have been logged to Jira.
+            # Give a summary of totals, but don't report problems (no further
+            # actions can be taken on the journal anyway)
             self.stdout.write('Journal is fully logged', style='success')
             show_problems = False
         elif not journal.tasks:
             # The journal is either empty or its tasks could not be extracted
             # for some reason. Don't show a summary (there will be nothing to
             # include anyway), but show any problems that may have prevented
-            # processing the journal's tasks
+            # processing the journal's tasks.
             self.stdout.write('Nothing to report', style='warning')
             show_summary = False
         else:
@@ -494,7 +494,7 @@ class SeqTask(Task):
             switching_cost = journal.total_switching_cost
             switching_cost_str = self.styler.label(format_duration(switching_cost))
             switching_cost_suffix = ''
-            if not journal.misc_task:
+            if not journal.misc_block:
                 switching_cost_suffix = self.styler.error(' (unloggable)')
             
             self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}{switching_cost_suffix}')
@@ -575,7 +575,7 @@ class SeqTask(Task):
             'Return to main menu',
             ('Show worklog summary', self.handle_log_work__show_worklog, handler_args),
             ('[unimplemented] Submit worklog', self.handle_log_work__submit_worklog, handler_args),
-            ('Mark all tasks as logged', self.handle_log_work__mark_logged, handler_args),
+            ('Mark all work as logged', self.handle_log_work__mark_logged, handler_args),
             ('Update journal', self.handle_log_work__update_journal, handler_args),
             ('Re-parse journal', self.parse_journal, handler_args)
         )
@@ -590,14 +590,14 @@ class SeqTask(Task):
         unlogged_tasks = journal.unlogged_tasks
         
         if logged_tasks:
-            self.stdout.write('\nLogged task summary:\n', style='label')
+            self.stdout.write('\nLogged work summary:\n', style='label')
             
             for task in logged_tasks:
                 summary = get_task_summary(task, self.styler.error)
                 self.stdout.write(summary)
         
         if unlogged_tasks:
-            self.stdout.write('\nUnlogged task summary:\n', style='label')
+            self.stdout.write('\nUnlogged work summary:\n', style='label')
             
             for task in unlogged_tasks:
                 summary = get_task_summary(task, self.styler.error)

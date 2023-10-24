@@ -2,22 +2,22 @@ import datetime
 import os
 import re
 
-# Recognise task IDs as one or more letters, followed by a hyphen, followed
+# Recognise issue IDs as one or more letters, followed by a hyphen, followed
 # by one or more digits. The ID may optionally be wrapped in double square
 # brackets, and optionally be followed by a colon.
 # E.g. "ABC-123", "ABC-123:", "[[ABC-123]]", "[[ABC-123]]:"
-_task_id_re = r'(\[{2})?([A-Z]+-\d+)(\]{2})?:?'
-TASK_ID_RE = re.compile(fr'^{_task_id_re}$')
+_issue_id_re = r'(\[{2})?([A-Z]+-\d+)(\]{2})?:?'
+ISSUE_ID_RE = re.compile(fr'^{_issue_id_re}$')
 
 # Recognise a "task block" as one starting with a keyword ("NOW", "LATER",
 # "TODO", "DOING", or "DONE"), followed by a space, at the beginning of the
 # line. The keyword can optionally be preceeded by any number of hashes,
-# representing the task's heading level.
+# representing the block's heading level.
 TASK_BLOCK_RE = re.compile(r'^\- (\#+ )?(NOW|LATER|TODO|DOING|DONE) ')
 
-# An an extension of a "task block", recognise an "issue block" using the same
-# rules, but also containing a Jira issue ID.
-ISSUE_BLOCK_RE = re.compile(fr'^\- (\#+ )?(NOW|LATER|TODO|DOING|DONE) {_task_id_re}')
+# An an extension of a "task block", recognise an "worklog block" using the
+# same rules, but also containing a Jira issue ID
+WORKLOG_BLOCK_RE = re.compile(fr'^\- (\#+ )?(NOW|LATER|TODO|DOING|DONE) {_issue_id_re}')
 
 # Recognise heading styles as any number of hashes, followed by a space,
 # at the beginning of the line
@@ -164,23 +164,23 @@ def sanitise(content):
     return content
 
 
-def find_issue_blocks(block):
+def find_worklog_blocks(block):
     """
-    Return a list of the "issue blocks" nested under the given ``Block``
+    Return a list of the "worklog blocks" nested under the given ``Block``
     instance, by recursively iterating through its children.
     
     :param block: The ``Block`` instance.
-    :return: The list of found ``IssueBlock`` instances.
+    :return: The list of found ``WorkLogBlock`` instances.
     """
     
-    tasks = []
+    matches = []
     for child in block.children:
-        if isinstance(child, IssueBlock):
-            tasks.append(child)
+        if isinstance(child, WorkLogBlock):
+            matches.append(child)
         
-        tasks.extend(find_issue_blocks(child))
+        matches.extend(find_worklog_blocks(child))
     
-    return tasks
+    return matches
 
 
 def find_by_property(block, property_name):
@@ -210,8 +210,8 @@ def get_block_class(content):
     """
     
     block_cls = Block
-    if ISSUE_BLOCK_RE.match(content):
-        block_cls = IssueBlock
+    if WORKLOG_BLOCK_RE.match(content):
+        block_cls = WorkLogBlock
     elif TASK_BLOCK_RE.match(content):
         block_cls = TaskBlock
     
@@ -433,26 +433,24 @@ class TaskBlock(Block):
     is_simple_block = False
 
 
-class IssueBlock(Block):
+class WorkLogBlock(TaskBlock):
     """
-    A parsed Logseq task - a special kind of block that represents a job to
-    be worked on. Tasks are denoted by their content beginning with a keyword
-    such as LATER, and are also expected to contain a task ID and to have work
-    logged against them.
+    A parsed Logseq "worklog block" - a special kind of task block that
+    represents a Jira issue being worked on. Worklog blocks are denoted by
+    containing a Jira issue ID, and are expected to have work logged against
+    them.
     
     Work can be logged either by Logseq's built-in logbook, or manual ``time::``
     properties (the latter is converted into the former when detected).
     
-    Tasks are considered invalid if:
+    Worklog blocks are considered invalid if:
     
     * Their logbook timer is still running. In order to accurately determine
       a task's total duration, all work must already be logged.
-    * They are nested within another task. Nested tasks are not supported.
-    * Nothing resembling a task ID exists in the task's content.
+    * They are nested within another worklog block. Nested worklog blocks are
+      not supported.
     * No time has been logged, either via the logbook or ``time::`` properties.
     """
-    
-    is_simple_block = False
     
     def __init__(self, *args, **kwargs):
         
@@ -462,27 +460,27 @@ class IssueBlock(Block):
         # that may be present
         content = HEADING_RE.sub('', self.content)
         
-        # Split content into keyword (e.g. LATER), task ID, and any optional
+        # Split content into keyword (e.g. LATER), issue ID, and any optional
         # remaining content
         keyword, *remainder = content.split(' ', 2)
         
         # At least one item in the remainder should always exist, because
-        # IssueBlocks are only created if a matching keyword *followed by a
-        # space* is found at the start of the line's content
-        task_id = remainder[0]
-        if TASK_ID_RE.match(task_id):
-            # Remove the task ID from the remainder - the rest (if any) will be
+        # WorkLogBlocks are only created if a matching keyword *followed by
+        # a space* is found at the start of the line's content
+        issue_id = remainder[0]
+        if ISSUE_ID_RE.match(issue_id):
+            # Remove the issue ID from the remainder - the rest (if any) will be
             # the task description
-            task_id = task_id.strip(':').strip('[').strip(']')
+            issue_id = issue_id.strip(':').strip('[').strip(']')
             description = remainder[1:]
         else:
-            # The first item of the remainder does not appear to be a task ID,
+            # The first item of the remainder does not appear to be a issue ID,
             # consider it part of the description
-            task_id = None
+            issue_id = None
             description = remainder
         
         self.keyword = keyword
-        self.task_id = task_id
+        self.issue_id = issue_id
         self.description = ' '.join(description)
         
         self.logbook = []
@@ -490,8 +488,8 @@ class IssueBlock(Block):
     @property
     def sanitised_content(self):
         
-        # The sanitised version of a IssueBlock's content is just the
-        # description portion, not the whole line. If the task doesn't
+        # The sanitised version of a WorkLogBlock's content is just the
+        # description portion, not the whole line. If the block doesn't
         # have a description, use its parent's sanitised content instead.
         description = self.description
         if not description:
@@ -523,7 +521,7 @@ class IssueBlock(Block):
     
     def add_to_logbook(self, date, duration):
         """
-        Add a manual entry to the task's logbook, using the given ``date`` and
+        Add a manual entry to the block's logbook, using the given ``date`` and
         ``duration``. Insert the entry at the beginning of the logbook, using
         fake timestamps. The duration is the important part.
         
@@ -537,7 +535,7 @@ class IssueBlock(Block):
     
     def convert_time_property(self, date):
         """
-        Convert any ``time::`` property on the task into a logbook entry,
+        Convert any ``time::`` property on the block into a logbook entry,
         using the given ``date``. This allows manual task durations to be
         subsequently treated as per regular logbook durations, i.e. contribute
         to the same totals, etc.
@@ -546,7 +544,7 @@ class IssueBlock(Block):
         beginning of the logbook, using fake timestamps. The duration is the
         important part.
         
-        Has no effect on tasks witout a ``time::`` property.
+        Has no effect on blocks witout a ``time::`` property.
         
         :param date: The date on which the logbook entry should be made.
         """
@@ -557,8 +555,8 @@ class IssueBlock(Block):
         time_value = self.properties['time']
         
         # If the value isn't a valid duration string, leave the property in
-        # place as a flag that the task isn't valid to be logged. Otherwise
-        # remove it and replace it with a logbook entry.
+        # place as a flag that the worklog entry isn't valid to be logged.
+        # Otherwise remove it and replace it with a logbook entry.
         try:
             time_value = parse_duration_input(time_value)
         except ParseError:
@@ -569,13 +567,13 @@ class IssueBlock(Block):
     
     def validate(self):
         """
-        Validate the task's content and return a dictionary of errors, if any.
+        Validate the block's content and return a dictionary of errors, if any.
         
         The dictionary is keyed on the error type, one of:
         
         * ``'keyword'``: Errors that relate to the task keyword, such as the
           logbook timer still running.
-        * ``'task_id'``: Errors that relate to the task ID, such as one not
+        * ``'issue_id'``: Errors that relate to the issue ID, such as one not
           being found.
         * ``'duration'``: Errors that relate to the work logged against the
           task, such as there not being any work logged at all.
@@ -584,7 +582,7 @@ class IssueBlock(Block):
         each type.
         
         The dictionary will only contain keys for error types that actually
-        apply to the task. An empty dictionary indicates no errors were
+        apply to the block. An empty dictionary indicates no errors were
         encountered.
         
         :return: The errors dictionary.
@@ -601,18 +599,18 @@ class IssueBlock(Block):
         if self.keyword in ('NOW', 'DOING'):
             add_error('keyword', 'Running timer detected')
         
-        # Ensure the task is not a child of another task
+        # Ensure the block is not a child of another worklog block
         p = self.parent
         while p:
-            if isinstance(p, IssueBlock):
-                add_error('keyword', 'Nested task detected')
+            if isinstance(p, WorkLogBlock):
+                add_error('keyword', 'Nested worklog block detected')
                 break
             
             p = p.parent
         
-        # Ensure the task has an ID and a duration
-        if not self.task_id:
-            add_error('task_id', 'No task ID')
+        # Ensure the block has an ID and a duration
+        if not self.issue_id:
+            add_error('issue_id', 'No issue ID')
         
         if not self.logbook:
             add_error('duration', 'No duration recorded')
@@ -660,16 +658,16 @@ class Journal(Block):
     lines, properties, child blocks, etc. Journals cannot also be tasks.
     
     Journals are responsible for parsing their own markdown file, and for
-    collating and processing the tasks contained within. This processing
-    includes:
+    collating and processing the task and worklog blocks contained within.
+    This processing includes:
     
     * Calculating the total duration of work logged to the journal's tasks.
     * Calculating the total estimated context switching cost of the journal's
       tasks, based on the duration of those tasks and a given sliding scale of
       per-task switching costs.
-    * Tracking an optional "miscellaneous" task, to which the estimated context
-      switching cost can be logged. Only a single miscellaneous task can exist
-      per journal.
+    * Tracking an optional "miscellaneous" worklog block, to which the estimated
+      context switching cost can be logged. Only a single miscellaneous worklog
+      block can exist per journal.
     
     Journals can also write back to their markdown file, persisting any changes
     made to the journal and its child blocks, including added properties,
@@ -684,7 +682,7 @@ class Journal(Block):
         self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
         self.switching_scale = switching_scale
         
-        self._misc_task = None
+        self._misc_block = None
         self._problems = None
         self._tasks = None
         
@@ -706,14 +704,14 @@ class Journal(Block):
         return self._problems
     
     @property
-    def misc_task(self):
+    def misc_block(self):
         """
-        A special task block to which the estimated context switching cost
+        A special worklog block to which the estimated context switching cost
         can be logged.
         """
         
-        if self._misc_task is not None:
-            return self._misc_task
+        if self._misc_block is not None:
+            return self._misc_block
         
         problems = self._problems
         if problems is None:
@@ -730,9 +728,9 @@ class Journal(Block):
                 'Subsequent miscellaneous blocks have no effect.'
             )))
         
-        self._misc_task = matches[0]
+        self._misc_block = matches[0]
         
-        return self._misc_task
+        return self._misc_block
     
     @property
     def tasks(self):
@@ -774,7 +772,7 @@ class Journal(Block):
         self.properties = {}
         self.continuation_lines = []
         self.children = []
-        self._misc_task = None
+        self._misc_block = None
         self._problems = []
         self._tasks = []
         self.is_fully_logged = False
@@ -913,8 +911,8 @@ class Journal(Block):
         date = self.date
         
         problems = self._problems
-        all_tasks = self._tasks = find_issue_blocks(self)
-        misc_task = self.misc_task
+        all_tasks = self._tasks = find_worklog_blocks(self)
+        misc_block = self.misc_block
         
         total_duration = 0
         total_switching_cost = 0
@@ -946,7 +944,7 @@ class Journal(Block):
             # if any. Do NOT add to the journal's total duration at this point,
             # as the total switching cost will be rounded at the end and added
             # to the total duration then.
-            if task is not misc_task:
+            if task is not misc_block:
                 total_switching_cost += switching_scale.for_duration(task_duration)
         
         if total_switching_cost > 0:
@@ -954,14 +952,14 @@ class Journal(Block):
             total_switching_cost = round_duration(total_switching_cost)
             total_duration += total_switching_cost
             
-            # Add the estimated switching cost to the misc task's logbook,
-            # if any, so it can be allocated to a relevant task
-            if misc_task:
-                misc_task.add_to_logbook(date, total_switching_cost)
+            # Add the estimated switching cost to the misc block's logbook,
+            # if any, so it can be allocated to a relevant Jira issue
+            if misc_block:
+                misc_block.add_to_logbook(date, total_switching_cost)
             else:
                 problems.insert(0, (
                     'warning',
-                    'No miscellaneous task found to log context switching cost against.'
+                    'No miscellaneous block found to log context switching cost against.'
                 ))
         
         self.total_switching_cost = total_switching_cost
@@ -969,15 +967,15 @@ class Journal(Block):
     
     def mark_all_logged(self):
         """
-        Mark all currently unlogged tasks in the journal (if any) as logged,
-        by adding a ``logged:: true`` property to them. Also add the three
-        core journal properties indicating a fully-logged journal:
+        Mark all currently unlogged worklog blocks in the journal (if any) as
+        logged, by adding a ``logged:: true`` property to them. Also add the
+        three core journal properties indicating a fully-logged journal:
         ``time-logged::``, ``total-duration::``, and ``switching-cost::``.
         """
         
-        # Mark all unlogged tasks as logged
-        for task in self.unlogged_tasks:
-            task.properties['logged'] = 'true'
+        # Mark all unlogged worklog blocks as logged
+        for block in self.unlogged_tasks:
+            block.properties['logged'] = 'true'
         
         # Record total duration and total switching cost as journal properties
         self.properties['total-duration'] = format_duration(self.total_duration)
