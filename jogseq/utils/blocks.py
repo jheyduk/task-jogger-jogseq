@@ -7,7 +7,6 @@ import re
 # brackets, and optionally be followed by a colon.
 # E.g. "ABC-123", "ABC-123:", "[[ABC-123]]", "[[ABC-123]]:"
 _issue_id_re = r'(\[{2})?([A-Z]+-\d+)(\]{2})?:?'
-ISSUE_ID_RE = re.compile(fr'^{_issue_id_re}$')
 
 # Recognise a "task block" as one starting with a keyword ("NOW", "LATER",
 # "TODO", "DOING", or "DONE"), followed by a space, at the beginning of the
@@ -431,66 +430,31 @@ class Block:
 class TaskBlock(Block):
     
     is_simple_block = False
-
-
-class WorkLogBlock(TaskBlock):
-    """
-    A parsed Logseq "worklog block" - a special kind of task block that
-    represents a Jira issue being worked on. Worklog blocks are denoted by
-    containing a Jira issue ID, and are expected to have work logged against
-    them.
-    
-    Work can be logged either by Logseq's built-in logbook, or manual ``time::``
-    properties (the latter is converted into the former when detected).
-    
-    Worklog blocks are considered invalid if:
-    
-    * Their logbook timer is still running. In order to accurately determine
-      a task's total duration, all work must already be logged.
-    * They are nested within another worklog block. Nested worklog blocks are
-      not supported.
-    * No time has been logged, either via the logbook or ``time::`` properties.
-    """
     
     def __init__(self, *args, **kwargs):
         
         super().__init__(*args, **kwargs)
         
+        self.logbook = []
+        
         # For the purposes of the below parsing, ignore any heading styles
         # that may be present
         content = HEADING_RE.sub('', self.content)
         
-        # Split content into keyword (e.g. LATER), issue ID, and any optional
-        # remaining content
-        keyword, *remainder = content.split(' ', 2)
+        # Split content into keyword (e.g. LATER) and any optional remaining
+        # content
+        self.keyword, remainder = content.split(' ', 1)
         
-        # At least one item in the remainder should always exist, because
-        # WorkLogBlocks are only created if a matching keyword *followed by
-        # a space* is found at the start of the line's content
-        issue_id = remainder[0]
-        if ISSUE_ID_RE.match(issue_id):
-            # Remove the issue ID from the remainder - the rest (if any) will be
-            # the task description
-            issue_id = issue_id.strip(':').strip('[').strip(']')
-            description = remainder[1:]
-        else:
-            # The first item of the remainder does not appear to be a issue ID,
-            # consider it part of the description
-            issue_id = None
-            description = remainder
-        
-        self.keyword = keyword
-        self.issue_id = issue_id
-        self.description = ' '.join(description)
-        
-        self.logbook = []
+        # Process the remaining content for any other relevant tokens and store
+        # the remainder as the task description
+        self.description = self._process_content(remainder)
     
     @property
     def sanitised_content(self):
         
-        # The sanitised version of a WorkLogBlock's content is just the
-        # description portion, not the whole line. If the block doesn't
-        # have a description, use its parent's sanitised content instead.
+        # The sanitised version of a task's content is just the description
+        # portion, not the whole line. If the block doesn't have a description,
+        # use its parent's sanitised content instead.
         description = self.description
         if not description:
             description = self.parent.sanitised_content
@@ -500,6 +464,13 @@ class WorkLogBlock(TaskBlock):
             return description.rstrip(':')
         
         return sanitise(description)
+    
+    def _process_content(self, content):
+        
+        # Do nothing by default - consider all remaining content the task
+        # description. Primarily a hook for subclasses that need to extract
+        # further tokens.
+        return content
     
     def _process_new_line(self, content):
         
@@ -565,6 +536,66 @@ class WorkLogBlock(TaskBlock):
             del self.properties['time']
             self.add_to_logbook(date, time_value)
     
+    def get_total_duration(self):
+        """
+        Calculate the total duration of work logged against this task,
+        obtained by aggregating the task's logbook. Return the total, rounded
+        to the most appropriate interval using ``round_duration()``.
+        
+        :return: The rounded total duration of work logged to the task.
+        """
+        
+        total = sum(log.duration for log in self.logbook)
+        
+        return round_duration(total)
+    
+    def get_property_lines(self):
+        
+        lines = super().get_property_lines()
+        
+        if self.logbook:
+            lines.append(':LOGBOOK:')
+            
+            for log in self.logbook:
+                lines.append(log.content)
+            
+            lines.append(':END:')
+        
+        return lines
+
+
+class WorkLogBlock(TaskBlock):
+    """
+    A parsed Logseq "worklog block" - a special kind of task block that
+    represents a Jira issue being worked on. Worklog blocks are denoted by
+    containing a Jira issue ID, and are expected to have work logged against
+    them.
+    
+    Work can be logged either by Logseq's built-in logbook, or manual ``time::``
+    properties (the latter is converted into the former when detected).
+    
+    Worklog blocks are considered invalid if:
+    
+    * Their logbook timer is still running. In order to accurately determine
+      a task's total duration, all work must already be logged.
+    * They are nested within another worklog block. Nested worklog blocks are
+      not supported.
+    * No time has been logged, either via the logbook or ``time::`` properties.
+    """
+    
+    def _process_content(self, content):
+        
+        content = super()._process_content(content)
+        
+        # The content of a worklog block will always contain at least a token
+        # resembling a Jira issue ID, as they are only created when that is the
+        # case, but it may not contain any further content
+        issue_id, *remainder = content.split(' ', 1)
+        
+        self.issue_id = issue_id.strip(':').strip('[').strip(']')
+        
+        return ' '.join(remainder)
+    
     def validate(self):
         """
         Validate the block's content and return a dictionary of errors, if any.
@@ -620,33 +651,6 @@ class WorkLogBlock(TaskBlock):
             add_error('duration', 'Invalid format for "time" property')
         
         return errors
-    
-    def get_total_duration(self):
-        """
-        Calculate the total duration of work logged against this task,
-        obtained by aggregating the task's logbook. Return the total, rounded
-        to the most appropriate interval using ``round_duration()``.
-        
-        :return: The rounded total duration of work logged to the task.
-        """
-        
-        total = sum(log.duration for log in self.logbook)
-        
-        return round_duration(total)
-    
-    def get_property_lines(self):
-        
-        lines = super().get_property_lines()
-        
-        if self.logbook:
-            lines.append(':LOGBOOK:')
-            
-            for log in self.logbook:
-                lines.append(log.content)
-            
-            lines.append(':END:')
-        
-        return lines
 
 
 class Journal(Block):
