@@ -487,8 +487,11 @@ class SeqTask(Task):
             show_summary = False
         else:
             num_tasks = self.styler.label(len(journal.tasks))
-            num_unlogged_tasks = self.styler.label(len(journal.unlogged_tasks))
-            self.stdout.write(f'Found {num_unlogged_tasks} unlogged tasks (out of {num_tasks} total)')
+            num_unlogged = self.styler.label(len(journal.unlogged_worklogs))
+            self.stdout.write(
+                f'Found {num_unlogged} unlogged worklog entries'
+                f' (out of {num_tasks} total tasks)'
+            )
         
         if show_summary:
             switching_cost = journal.total_switching_cost
@@ -582,24 +585,24 @@ class SeqTask(Task):
     
     def handle_log_work__show_worklog(self, journal):
         
-        if not journal.tasks:
-            self.stdout.write('\nJournal contains no tasks to summarise', style='warning')
+        if not journal.worklogs:
+            self.stdout.write('\nJournal contains no worklog entries to summarise', style='warning')
             return
         
-        logged_tasks = journal.logged_tasks
-        unlogged_tasks = journal.unlogged_tasks
+        logged = journal.logged_worklogs
+        unlogged = journal.unlogged_worklogs
         
-        if logged_tasks:
+        if logged:
             self.stdout.write('\nLogged work summary:\n', style='label')
             
-            for task in logged_tasks:
+            for task in logged:
                 summary = get_task_summary(task, self.styler.error)
                 self.stdout.write(summary)
         
-        if unlogged_tasks:
+        if unlogged:
             self.stdout.write('\nUnlogged work summary:\n', style='label')
             
-            for task in unlogged_tasks:
+            for task in unlogged:
                 summary = get_task_summary(task, self.styler.error)
                 self.stdout.write(summary)
     
@@ -607,17 +610,17 @@ class SeqTask(Task):
         
         self._check_journal_fully_logged(journal)
         
-        unlogged_tasks = journal.unlogged_tasks
+        unlogged = journal.unlogged_worklogs
         
-        if not unlogged_tasks:
-            self.stdout.write('\nJournal contains no unlogged tasks to submit', style='warning')
+        if not unlogged:
+            self.stdout.write('\nJournal contains no unlogged worklog entries to submit', style='warning')
             return
         
         self.stdout.write(
-            '\nIf you continue, the tasks in this journal will be submitted to'
-            ' Jira as worklog entries. The journal file will then be updated to'
-            ' reflect any processing performed by this program, flag the tasks'
-            ' as done, and note the details of the submission.'
+            '\nIf you continue, the worklog entries in this journal will be'
+            ' submitted to Jira. The journal file will then be updated to'
+            ' reflect any processing performed by this program, flag those'
+            ' tasks as done, and note the details of the submission.'
         )
         
         self.show_confirmation_prompt('Are you sure you wish to continue')
@@ -639,17 +642,17 @@ class SeqTask(Task):
         
         self._check_journal_fully_logged(journal)
         
-        unlogged_tasks = journal.unlogged_tasks
+        unlogged = journal.unlogged_worklogs
         
-        if not unlogged_tasks:
-            self.stdout.write('\nJournal contains no unlogged tasks to mark as logged', style='warning')
+        if not unlogged:
+            self.stdout.write('\nJournal contains no unlogged worklog entries to mark as logged', style='warning')
             return
         
         self.stdout.write(
-            '\nIf you continue, all tasks in this journal not currently marked'
-            ' as logged will be marked as such. These changes will NOT be'
-            ' written back to the Logseq markdown file. Use the "Update journal"'
-            ' option to persist them.'
+            '\nIf you continue, all worklog entries in this journal not'
+            ' currently marked as logged will be marked as such. These changes'
+            ' will NOT be written back to the Logseq markdown file. Use the'
+            ' "Update journal" option to persist them.'
         )
         
         self.show_confirmation_prompt('Are you sure you wish to continue')
@@ -657,16 +660,16 @@ class SeqTask(Task):
         if journal.problems:
             self.stdout.write(
                 '\nProblems were found parsing this journal. Continuing may'
-                ' result in incorrect or incomplete tasks being marked as logged.'
+                ' result in incorrect or incomplete entries being marked as logged.'
             )
             
             self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
         
-        num_unlogged = len(unlogged_tasks)
+        num_unlogged = len(unlogged)
         
         journal.mark_all_logged()
         
-        self.stdout.write(f'\nMarked {num_unlogged} tasks as logged.', style='success')
+        self.stdout.write(f'\nMarked {num_unlogged} worklog entries as logged.', style='success')
     
     def handle_log_work__update_journal(self, journal):
         

@@ -163,21 +163,21 @@ def sanitise(content):
     return content
 
 
-def find_worklog_blocks(block):
+def find_tasks(block):
     """
-    Return a list of the "worklog blocks" nested under the given ``Block``
-    instance, by recursively iterating through its children.
+    Return a list of the task blocks nested under the given ``Block`` instance,
+    by recursively iterating through its children.
     
     :param block: The ``Block`` instance.
-    :return: The list of found ``WorkLogBlock`` instances.
+    :return: The list of found ``TaskBlock`` instances.
     """
     
     matches = []
     for child in block.children:
-        if isinstance(child, WorkLogBlock):
+        if isinstance(child, TaskBlock):
             matches.append(child)
         
-        matches.extend(find_worklog_blocks(child))
+        matches.extend(find_tasks(child))
     
     return matches
 
@@ -748,22 +748,30 @@ class Journal(Block):
         return self._tasks
     
     @property
-    def logged_tasks(self):
+    def worklogs(self):
         """
-        A list of all tasks present in the journal that have been marked as
+        A list of all worklog tasks present in the journal.
+        """
+        
+        return [t for t in self.tasks if isinstance(t, WorkLogBlock)]
+    
+    @property
+    def logged_worklogs(self):
+        """
+        A list of all worklogs present in the journal that have been marked as
         logged (i.e. have a `logged::` property).
         """
         
-        return [t for t in self.tasks if 'logged' in t.properties]
+        return [wl for wl in self.worklogs if 'logged' in wl.properties]
     
     @property
-    def unlogged_tasks(self):
+    def unlogged_worklogs(self):
         """
-        A list of all tasks present in the journal that have not been marked as
-        logged (i.e. do not have a `logged::` property).
+        A list of all worklogs present in the journal that have not been marked
+        as logged (i.e. do not have a `logged::` property).
         """
         
-        return [t for t in self.tasks if 'logged' not in t.properties]
+        return [wl for wl in self.worklogs if 'logged' not in wl.properties]
     
     def parse(self):
         """
@@ -915,7 +923,7 @@ class Journal(Block):
         date = self.date
         
         problems = self._problems
-        all_tasks = self._tasks = find_worklog_blocks(self)
+        all_tasks = self._tasks = find_tasks(self)
         misc_block = self.misc_block
         
         total_duration = 0
@@ -928,12 +936,13 @@ class Journal(Block):
                 # Convert any time:: properties to logbook entries
                 task.convert_time_property(date)
                 
-                # Add any errors with the task definition to the journal's
-                # overall list of problems
-                errors = task.validate()
-                for messages in errors.values():
-                    for msg in messages:
-                        problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
+                if isinstance(task, WorkLogBlock):
+                    # Add any errors with the worklog definition to the
+                    # journal's overall list of problems
+                    errors = task.validate()
+                    for messages in errors.values():
+                        for msg in messages:
+                            problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
             
             # Regardless of whether the task is logged or not, still include
             # it in totals calculations
