@@ -502,9 +502,14 @@ class SeqTask(Task):
             
             self.stdout.write(f'\nEstimated context switching cost: {switching_cost_str}{switching_cost_suffix}')
             
+            unloggable_duration = journal.unloggable_duration
+            if unloggable_duration:
+                unloggable_duration_str = self.styler.label(format_duration(unloggable_duration))
+                self.stdout.write(f'Time against non-worklog tasks: {unloggable_duration_str}')
+            
             total_duration = journal.total_duration
             total_duration_str = self.styler.label(format_duration(total_duration))
-            self.stdout.write(f'Total duration (rounded): {total_duration_str}')
+            self.stdout.write(f'Total time: {total_duration_str}')
             
             # Calculate the "slack time" based on the target duration and the
             # total duration of all tasks

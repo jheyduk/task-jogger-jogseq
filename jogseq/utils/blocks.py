@@ -692,6 +692,7 @@ class Journal(Block):
         
         self.is_fully_logged = False
         self.total_duration = None
+        self.unloggable_duration = None
         self.total_switching_cost = None
     
     @property
@@ -789,6 +790,7 @@ class Journal(Block):
         self._tasks = []
         self.is_fully_logged = False
         self.total_duration = None
+        self.unloggable_duration = None
         self.total_switching_cost = None
         
         current_block = self
@@ -927,6 +929,7 @@ class Journal(Block):
         misc_block = self.misc_block
         
         total_duration = 0
+        unloggable_duration = 0
         total_switching_cost = 0
         switching_scale = self.switching_scale
         
@@ -953,6 +956,11 @@ class Journal(Block):
             task_duration = task.get_total_duration()
             total_duration += task_duration
             
+            if not isinstance(task, WorkLogBlock):
+                # If the task is not a worklog, add its duration to the
+                # journal's total unloggable duration
+                unloggable_duration += task_duration
+            
             # Also calculate the task's switching cost, ignoring the misc task,
             # if any. Do NOT add to the journal's total duration at this point,
             # as the total switching cost will be rounded at the end and added
@@ -976,6 +984,7 @@ class Journal(Block):
                 ))
         
         self.total_switching_cost = total_switching_cost
+        self.unloggable_duration = unloggable_duration
         self.total_duration = total_duration
     
     def mark_all_logged(self):
