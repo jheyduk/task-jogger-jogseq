@@ -24,41 +24,6 @@ def set_duration_interval(interval):
         raise ValueError('Duration interval must be either 1 or 5.')
 
 
-def get_task_summary(task, error_styler):
-    
-    errors = task.validate()
-    
-    issue_id = task.issue_id
-    if not issue_id:
-        issue_id = '???'
-    
-    if 'issue_id' in errors and 'keyword' not in errors:
-        issue_id = error_styler(issue_id)
-    
-    duration = task.get_total_duration()
-    if not duration:
-        duration = '???'
-    else:
-        duration = format_duration(duration)
-    
-    if 'duration' in errors and 'keyword' not in errors:
-        duration = error_styler(duration)
-    
-    output = f'{issue_id}: {duration}'
-    description = task.sanitised_content
-    if description:
-        output = f'{output}; {description}'
-    
-    if 'keyword' in errors:
-        output = error_styler(output)
-    
-    extra_lines = '\n'.join(task.get_all_extra_lines())
-    if extra_lines:
-        output = f'{output}\n{extra_lines}'
-    
-    return output
-
-
 class Return(Exception):
     """
     Raised to trigger a return to the previous menu, or (if there is no
@@ -423,12 +388,14 @@ class SeqTask(Task):
         switching_scale = self.get_switching_scale()
         
         if not journal:
-            journal = Journal(self.settings['graph_path'], date, switching_scale)
+            journal = Journal(self.settings['graph_path'], date, switching_scale, self.api)
+        
+        self.stdout.write(f'\nParsing journal for: {journal.date}…', style='label')
         
         try:
             journal.parse()
         except FileNotFoundError:
-            self.stdout.write(f'No journal found for {journal.date}', style='error')
+            self.stdout.write(f'No journal found for date', style='error')
             return None
         
         if show_summary:
@@ -466,8 +433,6 @@ class SeqTask(Task):
         Display a summary of the given `Journal` object's contents, including
         any problems detected while parsing it.
         """
-        
-        self.stdout.write(f'\nRead journal for: {journal.date}', style='label')
         
         show_summary = True
         show_problems = True
@@ -536,6 +501,37 @@ class SeqTask(Task):
                 prefix = styler(f'[{level.upper()}]')
                 self.stdout.write(f'{prefix} {msg}')
     
+    def show_worklog_summary(self, task):
+        
+        errors = task.validate(self.api)
+        
+        issue_id = task.issue_id
+        if 'issue_id' in errors and 'keyword' not in errors:
+            issue_id = self.styler.error(issue_id)
+        
+        duration = task.get_total_duration()
+        if not duration:
+            duration = '???'
+        else:
+            duration = format_duration(duration)
+        
+        if 'duration' in errors and 'keyword' not in errors:
+            duration = self.styler.error(duration)
+        
+        output = f'{issue_id}: {duration}'
+        description = task.sanitised_content
+        if description:
+            output = f'{output}; {description}'
+        
+        if 'keyword' in errors:
+            output = self.styler.error(output)
+        
+        extra_lines = '\n'.join(task.get_all_extra_lines())
+        if extra_lines:
+            output = f'{output}\n{extra_lines}'
+        
+        self.stdout.write(output)
+
     def _check_journal_fully_logged(self, journal):
         
         if journal.is_fully_logged:
@@ -601,15 +597,13 @@ class SeqTask(Task):
             self.stdout.write('\nLogged work summary:\n', style='label')
             
             for task in logged:
-                summary = get_task_summary(task, self.styler.error)
-                self.stdout.write(summary)
+                self.show_worklog_summary(task)
         
         if unlogged:
             self.stdout.write('\nUnlogged work summary:\n', style='label')
             
             for task in unlogged:
-                summary = get_task_summary(task, self.styler.error)
-                self.stdout.write(summary)
+                self.show_worklog_summary(task)
     
     def handle_log_work__submit_worklog(self, journal):
         
