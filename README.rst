@@ -19,7 +19,7 @@ Installation
 
 The latest stable version of ``jogseq`` can be installed from PyPI::
 
-    pip install task-jogger task-jogger-jogseq
+    pip install task-jogger-jogseq
 
 The following dependencies will also be installed:
 
@@ -89,9 +89,7 @@ Assumptions
 
 For logging work to Jira, the following assumptions apply:
 
-* Task blocks use the ``NOW`` / ``LATER`` workflow rather than ``TODO`` / ``DOING``. This allows for ``TODO`` tasks to be nested under ``NOW`` / ``LATER`` blocks as placeholder tasks to be completed at a later date, and not logged as part of the current journal.
-* ``NOW`` / ``LATER`` tasks cannot be nested within each other. This prevents ambiguity when determining the total duration of a task (does logged time apply to the parent or child task?). Nesting tasks under regular blocks is fine, as is nesting regular blocks under tasks (they will be included in the worklog description).
-* The Jira issue ID of a task must be the second token in the block (after ``NOW`` / ``LATER``). Following it with a colon is optional, and using link syntax is supported. For example::
+* Task blocks can use the ``NOW`` / ``LATER`` or ``TODO`` / ``DOING`` workflows, but will only be recognised as "worklog blocks" if this keyword is followed by a token looking like a Jira issue ID (one or more letters, a hyphen, then one or more numbers). It may optionally be followed by a colon, and using link syntax is supported. For example::
     
         # Valid
         NOW ABC-123 Do something
@@ -103,7 +101,8 @@ For logging work to Jira, the following assumptions apply:
         NOW Do something #ABC-123
         NOW Do something for [[ABC-123]]
 
-* Tasks that should be logged to Jira are never marked ``DONE`` (rather, they are just left as ``LATER``). Tasks marked as ``DONE`` will be ignored. When a task is logged by ``jogseq``, it will be given the ``logged:: true`` property.
+* Worklog blocks (as identified per the above) cannot be nested within each other. This prevents ambiguity when determining the total duration of the worklog entry. Nesting worklogs under regular blocks is fine, as is nesting regular blocks under worklogs (they will be included in the worklog description). Ordinary task blocks (without a Jira ID) can also be nested under worklog blocks, but will NOT be included in the worklog description, and any time logged against them will NOT be included in the worklog duration.
+* Time logged against any task blocks will be recognised and included in various duration calculations, but will only be logged to Jira if recorded against worklog blocks specifically (as identified per the above).
 
 
 Features
@@ -112,21 +111,22 @@ Features
 Logging work
 ------------
 
-``jogseq`` can be used to create worklog entries against Jira issues that you track time against in Logseq. This feature works by examining a single day's journal, identifying task blocks, parsing their content and total duration, and then logging that time to Jira.
+``jogseq`` can be used to create worklog entries against Jira issues that you track time against in Logseq. This feature works by examining a single day's journal, identifying worklog blocks, parsing their content and total duration, and then logging that time to Jira.
 
-For a journal block to be considered a task valid for logging to Jira, it must:
+For a journal block to be considered a worklog valid for logging to Jira, it must:
 
-* Use one of the ``NOW`` / ``LATER`` keywords
-* Include a Jira issue ID as the second token in the block
+* Use one of the ``NOW``, ``LATER``, ``TODO``, ``DOING``, or ``DONE`` keywords
+* Include a Jira issue ID immediately following the keyword
 * Have some time logged against it
 
-If any issues are encountered parsing any of these values, including any being missing entirely, an error will be reported and the task will not be loggable. Note that any blocks with a running timer (i.e. using the ``NOW`` keyword) will also report an error and not be loggable, as their final duration is unknown.
+If any issues are encountered parsing any of these values, including being missing or invalid, an error will be reported and the worklog will not be loggable. Note that any blocks with a running timer (i.e. using the ``NOW`` or ``DOING`` keywords) will also report an error and not be loggable, as their final duration is unknown.
 
-The description used for a task's Jira worklog entry will be comprised of the block's direct content, as well as any child blocks nested under it, with the following considerations:
+The description used for a block's Jira worklog entry will be comprised of the block's direct content, as well as any child blocks nested under it, with the following considerations:
 
-* The ``LATER`` keyword and Jira issue ID are excluded.
+* The block's keyword and Jira issue ID are excluded.
 * Block properties are excluded.
-* Any child blocks using the ``TODO`` or ``DONE`` keywords are excluded.
+* Any child blocks using task keywords (e.g. ``TODO``, ``LATER``, ``DONE``, etc) are excluded.
+* Any Logseq heading syntax will be stripped. E.g. "### Did some work" will be logged as "Did some work".
 * Any Logseq link syntax will be stripped. E.g. "Meeting with [[Bob]]" will be logged as "Meeting with Bob".
 
 Manual durations
@@ -143,11 +143,11 @@ Duration rounding
 
 ``jogseq`` will automatically round all task durations.
 
-By default, it rounds durations to five-minute intervals. Any duration more than 90 seconds into the next interval will be rounded up, otherwise it will be rounded down. This helps account for additional time inevitably taken for most tasks outside the span captured by starting and stopping the timer. It also more closely aligns with how work would be logged manually, when not using a timer.
+By default, it rounds durations to five-minute intervals. Any duration more than 90 seconds into the next interval will be rounded up, otherwise it will be rounded down. This allows for consistency with reading and reporting logged time, and more closely aligns with how work would be logged manually, when not using a timer.
 
-However, if this is not desirable, it is also possible to configure ``jogseq`` to round durations to the nearest minute. This allows for more accuracy if the timer is used to capture all time spent on a task. To do this, set the ``duration_interval`` setting to ``1``. See `Configuration`_.
+However, if this is not desirable, it is also possible to configure ``jogseq`` to round durations to the nearest minute. This allows for higher accuracy if necessary. To do this, set the ``duration_interval`` setting to ``1``. See `Configuration`_.
 
-In both configurations, durations under chosen interval will always be rounded up. Durations of 0 are not logged.
+In both configurations, durations of ``0`` are not rounded, but any duration greater than ``0`` and less than the chosen interval will always be rounded up, regardless of how close to ``0`` it is. Durations of ``0`` are not submitted to Jira.
 
 Target duration
 ~~~~~~~~~~~~~~~
@@ -165,16 +165,16 @@ The scale used to calculate switching costs can be any range of values, in minut
 
 By default, the range is ``0-0``, effectively disabling the feature. To enable it, specify a suitable range via the ``switching_cost`` setting. See `Configuration`_.
 
-When a valid range is specified, an estimated overall context switching cost for the journal will always be calculated, reported, and included in the journal's total duration. But it is not logged to Jira as part of individual tasks. Rather, it will only be logged to Jira if a generic, "miscellaneous" task is present in the journal. This task should be identified by having the ``misc:: true`` property. There should only be one such task per journal. Only the first will be recognised, any additional miscellaneous tasks will be ignored and display a warning.
+When a valid range is specified, an estimated overall context switching cost for the journal will always be calculated, reported, and included in the journal's total duration. But it is not logged to Jira as part of individual worklog blocks. Rather, it will only be logged to Jira if a generic, "miscellaneous" worklog block is present in the journal. This block should be identified by having the ``misc:: true`` property. There should only be one such block per journal. Only the first will be recognised, any additional miscellaneous blocks will be ignored and display a warning.
 
 Repetitive tasks
 ~~~~~~~~~~~~~~~~
 
-If multiple tasks use the same description, it is possible to nest them under a common parent block and have them inherit their description from it. Each individual task should just leave out a description - only specifying the Jira issue ID. This can be useful in cases where the same process is applied to multiple tasks, such as code review. For example::
+If multiple worklog blocks would use the same description, it is possible to nest them under a common parent block and have them inherit their description from it. Each individual worklog block should just leave out a description - only specifying the Jira issue ID. This can be useful in cases where the same process is applied to multiple tasks, such as code review. For example::
 
     - Code review:
         - LATER ABC-123
         - LATER ABC-456
         - LATER ABC-789
 
-In this example, all three tasks (``ABC-123``, ``ABC-456``, and ``ABC-789``) will be logged to Jira with the "Code review" as the worklog description. The parent block itself will not be logged. Any trailing colon in the parent block's content will be stripped, but will otherwise be used verbatim.
+In this example, all three issues (``ABC-123``, ``ABC-456``, and ``ABC-789``) will be have a worklog entry submitted to Jira with "Code review" as the worklog description. The parent block itself will not be logged. Any trailing colon in the parent block's content will be stripped, but will otherwise be used verbatim.
