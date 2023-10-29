@@ -5,7 +5,7 @@ from os import path
 
 from jogger.tasks import Task
 
-from ..utils.blocks import DurationContext, Journal, format_duration
+from ..utils.logseq import DurationContext, Journal, format_duration
 from ..utils.jira import Jira, JIRAError
 
 
