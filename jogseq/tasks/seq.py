@@ -3,10 +3,10 @@ import math
 from getpass import getpass
 from os import path
 
-from jira import JIRA, JIRAError
 from jogger.tasks import Task
 
 from ..utils.blocks import DurationContext, Journal, format_duration
+from ..utils.jira import Jira, JIRAError
 
 
 def set_duration_interval(interval):
@@ -202,7 +202,7 @@ class SeqTask(Task):
         
         self.verify_config()
         
-        self.api = self.configure_api()
+        self.jira = self.configure_api()
         
         try:
             self.show_menu(
@@ -266,10 +266,10 @@ class SeqTask(Task):
         while not jira_api_token:
             jira_api_token = getpass('Jira API token: ')
         
-        api = JIRA(jira_url, basic_auth=(jira_user, jira_api_token))
+        jira = Jira(jira_url, jira_user, jira_api_token)
         
         try:
-            user_details = api.myself()
+            user_details = jira.api.myself()
         except JIRAError as e:
             if e.status_code == 401:
                 self.stderr.write('Invalid Jira credentials.')
@@ -283,7 +283,7 @@ class SeqTask(Task):
         
         self.stdout.write(f'Connected as: {user_name} ({user_email})', style='success')
         
-        return api
+        return jira
     
     def show_menu(self, intro, return_option, *other_options):
         """
@@ -388,14 +388,14 @@ class SeqTask(Task):
         switching_scale = self.get_switching_scale()
         
         if not journal:
-            journal = Journal(self.settings['graph_path'], date, switching_scale, self.api)
+            journal = Journal(self.settings['graph_path'], date, switching_scale, self.jira)
         
         self.stdout.write(f'\nParsing journal for: {journal.date}…', style='label')
         
         try:
             journal.parse()
         except FileNotFoundError:
-            self.stdout.write(f'No journal found for date', style='error')
+            self.stdout.write('No journal found for date', style='error')
             return None
         
         if show_summary:
@@ -503,7 +503,7 @@ class SeqTask(Task):
     
     def show_worklog_summary(self, task):
         
-        errors = task.validate(self.api)
+        errors = task.validate(self.jira)
         
         issue_id = task.issue_id
         if 'issue_id' in errors and 'keyword' not in errors:

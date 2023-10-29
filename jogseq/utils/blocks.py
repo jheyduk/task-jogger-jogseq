@@ -2,8 +2,6 @@ import datetime
 import os
 import re
 
-from jira import JIRAError
-
 # Recognise issue IDs as one or more letters, followed by a hyphen, followed
 # by one or more digits. The ID may optionally be wrapped in double square
 # brackets, and optionally be followed by a colon.
@@ -598,7 +596,7 @@ class WorkLogBlock(TaskBlock):
         
         return ' '.join(remainder)
     
-    def validate(self, jira_api):
+    def validate(self, jira):
         """
         Validate the block's content and return a dictionary of errors, if any.
         
@@ -618,7 +616,7 @@ class WorkLogBlock(TaskBlock):
         apply to the block. An empty dictionary indicates no errors were
         encountered.
         
-        :param jira_api: A ``JIRA`` instance for querying Jira.
+        :param jira: A ``Jira`` instance for querying Jira via API.
         :return: The errors dictionary.
         """
         
@@ -642,11 +640,8 @@ class WorkLogBlock(TaskBlock):
             
             p = p.parent
         
-        try:
-            jira_api.issue(self.issue_id, fields=['key'])
-        except JIRAError as e:
-            if e.status_code == 404:
-                add_error('issue_id', 'Issue ID not found in Jira')
+        if not jira.verify_issue_id(self.issue_id):
+            add_error('issue_id', 'Issue ID not found in Jira')
         
         if not self.logbook:
             add_error('duration', 'No duration recorded')
@@ -683,14 +678,14 @@ class Journal(Block):
     additional logbook entries, etc.
     """
     
-    def __init__(self, graph_path, date, switching_scale, jira_api):
+    def __init__(self, graph_path, date, switching_scale, jira):
         
         super().__init__(indent=-1, content='', parent=None)
         
         self.date = date
         self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
         self.switching_scale = switching_scale
-        self.jira_api = jira_api
+        self.jira = jira
         
         self._misc_block = None
         self._problems = None
@@ -948,7 +943,7 @@ class Journal(Block):
                 if isinstance(task, WorkLogBlock):
                     # Add any errors with the worklog definition to the
                     # journal's overall list of problems
-                    errors = task.validate(self.jira_api)
+                    errors = task.validate(self.jira)
                     for messages in errors.values():
                         for msg in messages:
                             problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
