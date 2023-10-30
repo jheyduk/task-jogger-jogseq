@@ -578,7 +578,7 @@ class SeqTask(Task):
             '\nJournal options:',
             'Return to main menu',
             ('Show worklog summary', self.handle_log_work__show_worklog, handler_args),
-            ('[unimplemented] Submit worklog', self.handle_log_work__submit_worklog, handler_args),
+            ('Submit worklog', self.handle_log_work__submit_worklog, handler_args),
             ('Mark all work as logged', self.handle_log_work__mark_logged, handler_args),
             ('Update journal', self.handle_log_work__update_journal, handler_args),
             ('Re-parse journal', self.parse_journal, handler_args)
@@ -615,27 +615,67 @@ class SeqTask(Task):
             self.stdout.write('\nJournal contains no unlogged worklog entries to submit', style='warning')
             return
         
+        problems = False
+        for task in unlogged:
+            errors = task.validate(self.jira)
+            for messages in errors.values():
+                problems = True
+                for msg in messages:
+                    self.stdout.write(f'{msg} for line "{task.trimmed_content}"', style='error')
+        
+        if problems:
+            self.stdout.write(
+                '\nThe above problems were found in unlogged worklog entries.'
+                ' Please correct them before proceeding.',
+                style='error'
+            )
+            return
+        
         self.stdout.write(
             '\nIf you continue, the worklog entries in this journal will be'
             ' submitted to Jira. The journal file will then be updated to'
             ' reflect any processing performed by this program, flag those'
-            ' tasks as done, and note the details of the submission.'
+            ' blocks as logged, and note the details of the submission.'
         )
         
         self.show_confirmation_prompt('Are you sure you wish to continue')
         
-        if journal.problems:
-            self.stdout.write(
-                '\nProblems were found parsing this journal. Continuing may'
-                ' result in incorrect or incomplete worklog entries being'
-                ' submitted to Jira. It may even result in data loss when'
-                ' updating the journal file.'
-            )
-            
-            self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
+        self.stdout.write(f'\nSubmitting {len(unlogged)} worklog entries...', style='label')
         
-        # TODO: Submit via API and update journal
-        self.stdout.write('Not implemented.', style='error')
+        successful = 0
+        unsuccessful = 0
+        for task in unlogged:
+            description = task.sanitised_content
+            extra_lines = '\n'.join(task.get_all_extra_lines())
+            if extra_lines:
+                description = f'{description}\n{extra_lines}'
+            
+            try:
+                self.jira.api.add_worklog(
+                    task.issue_id,
+                    timeSpentSeconds=task.get_total_duration(),
+                    comment=description
+                )
+                successful += 1
+            except Exception as e:
+                self.stderr.write(
+                    'The following error occurred attempting to submit a worklog'
+                    f' entry to issue {task.issue_id}. You may need to manually'
+                    ' log this entry.',
+                    style='error'
+                )
+                self.stdout.write(f'The error was:\n{e}')
+                unsuccessful += 1
+        
+        self.stdout.write('')  # blank line
+        
+        if successful:
+            self.stdout.write(f'Added {successful} worklog entries in Jira.', style='success')
+        
+        if unsuccessful:
+            self.stdout.write(f'{unsuccessful} worklog entries failed. See above for details.', style='error')
+        
+        # TODO: Mark tasks as logged, write back journal
     
     def handle_log_work__mark_logged(self, journal):
         
