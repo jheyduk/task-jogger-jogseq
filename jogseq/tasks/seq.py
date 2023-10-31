@@ -228,25 +228,20 @@ class SeqTask(Task):
             self.stderr.write('Invalid config: Graph path does not exist.')
             raise SystemExit(1)
         
-        # Verify `duration_interval` setting
-        try:
-            set_duration_interval(self.settings.get('duration_interval', 1))
-        except ValueError as e:
-            self.stderr.write(f'Invalid config: {e}')
-            raise SystemExit(1)
-        
-        # Verify `target_duration` setting
-        try:
-            self.get_target_duration()
-        except ValueError as e:
-            self.stderr.write(f'Invalid config: {e}')
-            raise SystemExit(1)
-        
         # Verify `switching_cost` setting
         try:
             self.get_switching_scale()
         except ValueError as e:
             self.stderr.write(str(e))
+            raise SystemExit(1)
+        
+        # Verify remaining settings
+        try:
+            set_duration_interval(self.settings.get('duration_interval', 1))
+            self.get_target_duration()
+            self.get_mark_done_when_logged()
+        except ValueError as e:
+            self.stderr.write(f'Invalid config: {e}')
             raise SystemExit(1)
     
     def configure_api(self):
@@ -427,6 +422,20 @@ class SeqTask(Task):
         cost_setting = self.settings.get('switching_cost', self.DEFAULT_SWITCHING_COST)
         
         return SwitchingCostScale(cost_setting, self.SWITCHING_COST_DURATION_RANGE)
+    
+    def get_mark_done_when_logged(self):
+        """
+        Return the configured `mark_done_when_logged` flag.
+        """
+        
+        mark_done = self.settings.get('mark_done_when_logged', 'true').lower()
+        
+        if mark_done in ('true', '1'):
+            return True
+        elif mark_done in ('false', '0'):
+            return False
+        else:
+            raise ValueError('Invalid value for "mark_done_when_logged" setting.')
     
     def show_journal_summary(self, journal):
         """
@@ -642,6 +651,8 @@ class SeqTask(Task):
         
         self.stdout.write(f'\nSubmitting {len(unlogged)} worklog entries...', style='label')
         
+        set_done = self.get_mark_done_when_logged()
+        
         successful = 0
         unsuccessful = 0
         for task in unlogged:
@@ -666,7 +677,7 @@ class SeqTask(Task):
                 self.stdout.write(f'The error was:\n{e}')
                 unsuccessful += 1
             else:
-                task.mark_as_logged()
+                task.mark_as_logged(set_done=set_done)
                 successful += 1
         
         self.stdout.write('')  # blank line
@@ -712,7 +723,7 @@ class SeqTask(Task):
         
         num_unlogged = len(unlogged)
         
-        journal.set_fully_logged()
+        journal.set_fully_logged(set_done=self.get_mark_done_when_logged())
         
         self.stdout.write(f'\nMarked {num_unlogged} worklog entries as logged.', style='success')
     
