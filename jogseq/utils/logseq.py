@@ -268,8 +268,13 @@ class LogbookEntry:
         """
         
         if self._duration is None:
-            duration_str = self.content.split('=>')[1].strip()
-            self._duration = parse_duration_timestamp(duration_str)
+            if '=>' not in self.content:
+                duration = 0
+            else:
+                duration_str = self.content.split('=>')[1].strip()
+                duration = parse_duration_timestamp(duration_str)
+            
+            self._duration = duration
         
         return self._duration
 
@@ -480,10 +485,11 @@ class TaskBlock(Block):
         if content in (':LOGBOOK:', ':END:'):
             return None
         elif content and content.startswith('CLOCK:'):
-            # Logbook timers started and stopped in the same second do
-            # not record a duration. They don't need to be processed or
-            # reproduced, they can be ignored.
-            if '=>' in content:
+            # Logbook timers started and stopped in the same second do not
+            # record a duration. They don't need to be processed or reproduced,
+            # they can be ignored. However, running timers also won't yet have
+            # a duration, but should be retained.
+            if '=>' in content or self.keyword in ('NOW', 'DOING'):
                 self.logbook.append(LogbookEntry(content))
             
             return None
