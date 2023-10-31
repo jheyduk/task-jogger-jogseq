@@ -44,6 +44,7 @@ The following optional settings are also available (see `Features`_ for details 
 * ``duration_interval``: The interval to round task durations to, in minutes. Defaults to ``5``. Valid options are ``5`` and ``1``.
 * ``switching_cost``: The estimated cost of context switching between tasks, in minutes. By default, no switching cost will be calculated. If specified, it should be a range that spans no more than 30 minutes, e.g. ``1-15``. The switching cost per task will be based on that task's duration - the longer the task, the higher the switching cost. Any task longer than an hour will use the maximum switching cost. To use a fixed switching cost per task, specify the same value for both ends of the range, e.g. ``5-5``.
 * ``target_duration``: The target total duration for each daily journal, in minutes. The durations of all tasks in the journal, plus the calculated switching cost as per the above, will be compared to this figure and the difference, if any, will be reported. Defaults to ``420`` (7 hours).
+* ``mark_done_when_logged``: Whether to set worklog entries to ``DONE`` when they are marked as logged. Defaults to ``true``. Valid options are ``true``, ``false``, ``1``, and ``0``.
 
 The following is a sample config file showing example configurations for the above::
 
@@ -53,10 +54,11 @@ The following is a sample config file showing example configurations for the abo
     jira_url = https://mycompany.atlassian.net
     jira_user = me@example.com
     jira_api_token = <token_string>
-
+    
     duration_interval = 1
     switching_cost = 1-15
     target_duration = 450
+    mark_done_when_logged = false
 
 NOTE: This assumes a task name of ``seq``, though any name can be used as long as it matches the name specified in ``jog.py`` (see below).
 
@@ -128,6 +130,8 @@ The description used for a block's Jira worklog entry will be comprised of the b
 * Any child blocks using task keywords (e.g. ``TODO``, ``LATER``, ``DONE``, etc) are excluded.
 * Any Logseq heading syntax will be stripped. E.g. "### Did some work" will be logged as "Did some work".
 * Any Logseq link syntax will be stripped. E.g. "Meeting with [[Bob]]" will be logged as "Meeting with Bob".
+
+When a worklog block is submitted to Jira, it will be given the ``logged:: true`` property. By default, it will also be set to ``DONE``, but this is configurable via the ``mark_done_when_logged`` setting. See `Configuration`_.
 
 Manual durations
 ~~~~~~~~~~~~~~~~
