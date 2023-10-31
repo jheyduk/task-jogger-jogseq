@@ -651,6 +651,20 @@ class WorkLogBlock(TaskBlock):
             add_error('duration', 'Invalid format for "time" property')
         
         return errors
+    
+    def mark_as_logged(self, set_done=True):
+        """
+        Flag this worklog entry as having been submitted to Jira, by adding
+        a ``logged::`` property. Optionally also set the task keyword to
+        ``DONE``.
+        
+        :param set_done: Whether to set the task keyword to ``DONE``.
+        """
+        
+        self.properties['logged'] = 'true'
+        
+        if set_done:
+            self.keyword = 'DONE'
 
 
 class Journal(Block):
@@ -988,17 +1002,27 @@ class Journal(Block):
         self.unloggable_duration = unloggable_duration
         self.total_duration = total_duration
     
-    def mark_all_logged(self):
+    def set_fully_logged(self, update_worklogs=True, set_done=True):
         """
-        Mark all currently unlogged worklog blocks in the journal (if any) as
-        logged, by adding a ``logged:: true`` property to them. Also add the
-        three core journal properties indicating a fully-logged journal:
+        Add the three core journal properties indicating a fully-logged journal:
         ``time-logged::``, ``total-duration::``, and ``switching-cost::``.
+        By default, also mark all currently unlogged worklog blocks in the
+        journal (if any) as logged, by adding a ``logged:: true`` property to
+        them. This can be disabled by passing ``update_worklogs=False``.
+        When marking worklog blocks as logged, by default also set flag them
+        as DONE. This can be disabled by passing ``set_done=False``.
+        
+        :param update_worklogs: Whether to mark all currently unlogged worklog
+            blocks in the journal as logged. Defaults to True.
+        :param set_done: Whether to set all currently unlogged worklog blocks
+            in the journal as DONE. Only applicable when `update_worklogs=True`.
+            Defaults to True.
         """
         
-        # Mark all unlogged worklog blocks as logged
-        for block in self.unlogged_tasks:
-            block.properties['logged'] = 'true'
+        # Optionally mark all unlogged worklog blocks as logged
+        if update_worklogs:
+            for block in self.unlogged_worklogs:
+                block.mark_as_logged(set_done=set_done)
         
         # Record total duration and total switching cost as journal properties
         self.properties['total-duration'] = format_duration(self.total_duration)

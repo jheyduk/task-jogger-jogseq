@@ -656,7 +656,6 @@ class SeqTask(Task):
                     timeSpentSeconds=task.get_total_duration(),
                     comment=description
                 )
-                successful += 1
             except Exception as e:
                 self.stderr.write(
                     'The following error occurred attempting to submit a worklog'
@@ -666,6 +665,9 @@ class SeqTask(Task):
                 )
                 self.stdout.write(f'The error was:\n{e}')
                 unsuccessful += 1
+            else:
+                task.mark_as_logged()
+                successful += 1
         
         self.stdout.write('')  # blank line
         
@@ -675,7 +677,11 @@ class SeqTask(Task):
         if unsuccessful:
             self.stdout.write(f'{unsuccessful} worklog entries failed. See above for details.', style='error')
         
-        # TODO: Mark tasks as logged, write back journal
+        # Set the journal as fully logged without marking all worklogs as
+        # logged - that will have been done individually above, if successful
+        journal.set_fully_logged(update_worklogs=False)
+        
+        journal.write_back()
     
     def handle_log_work__mark_logged(self, journal):
         
@@ -706,7 +712,7 @@ class SeqTask(Task):
         
         num_unlogged = len(unlogged)
         
-        journal.mark_all_logged()
+        journal.set_fully_logged()
         
         self.stdout.write(f'\nMarked {num_unlogged} worklog entries as logged.', style='success')
     
