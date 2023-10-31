@@ -664,6 +664,10 @@ class WorkLogBlock(TaskBlock):
         self.properties['logged'] = 'true'
         
         if set_done:
+            # In addition to updating the `keyword` attribute, also replace
+            # the keyword in the block's actual content, so that it gets
+            # written back to the markdown file correctly
+            self.content = self.content.replace(self.keyword, 'DONE', 1)
             self.keyword = 'DONE'
 
 
