@@ -361,7 +361,7 @@ class SeqTask(Task):
             self.stdout.write('No action taken.')
             raise Return()
     
-    def parse_journal(self, journal=None, date=None, show_summary=True):
+    def parse_journal(self, journal=None, date=None, show_summary=False):
         """
         Parse a Logseq journal file and return a `Journal` object. Can either
         re-parse a file represented by an existing `Journal` object, or parse
@@ -385,7 +385,7 @@ class SeqTask(Task):
         if not journal:
             journal = Journal(self.settings['graph_path'], date, switching_scale, self.jira)
         
-        self.stdout.write(f'\nParsing journal for: {journal.date}…', style='label')
+        self.stdout.write(f'Parsing journal for: {journal.date}…', style='label')
         
         try:
             journal.parse()
@@ -580,7 +580,8 @@ class SeqTask(Task):
             
             date = datetime.date.today() - datetime.timedelta(days=offset)
             
-            journal = self.parse_journal(date=date)
+            self.stdout.write('')  # blank line
+            journal = self.parse_journal(date=date, show_summary=True)
         
         handler_args = (journal, )
         self.show_menu(
@@ -590,7 +591,7 @@ class SeqTask(Task):
             ('Submit worklog', self.handle_log_work__submit_worklog, handler_args),
             ('Mark all work as logged', self.handle_log_work__mark_logged, handler_args),
             ('Update journal', self.handle_log_work__update_journal, handler_args),
-            ('Re-parse journal', self.parse_journal, handler_args)
+            ('Re-parse journal', self.handle_log_work__reparse_journal, handler_args)
         )
     
     def handle_log_work__show_worklog(self, journal):
@@ -757,3 +758,8 @@ class SeqTask(Task):
         self.stdout.write('\nJournal file updated.', style='success')
         input('Hit ENTER to return to the main menu...')
         raise Return(ttl=1)  # skip "log work" menu and return to main menu
+    
+    def handle_log_work__reparse_journal(self, journal):
+        
+        self.stdout.write('')  # blank line
+        self.parse_journal(journal=journal, show_summary=True)
