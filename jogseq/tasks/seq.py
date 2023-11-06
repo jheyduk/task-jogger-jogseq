@@ -513,9 +513,10 @@ class SeqTask(Task):
     def show_worklog_summary(self, task):
         
         errors = task.validate(self.jira)
+        error_types = [e.type for e in errors]
         
         issue_id = task.issue_id
-        if 'issue_id' in errors and 'keyword' not in errors:
+        if 'issue_id' in error_types and 'keyword' not in error_types:
             issue_id = self.styler.error(issue_id)
         
         duration = task.get_total_duration()
@@ -524,7 +525,7 @@ class SeqTask(Task):
         else:
             duration = format_duration(duration)
         
-        if 'duration' in errors and 'keyword' not in errors:
+        if 'duration' in error_types and 'keyword' not in error_types:
             duration = self.styler.error(duration)
         
         output = f'{issue_id}: {duration}'
@@ -532,7 +533,7 @@ class SeqTask(Task):
         if description:
             output = f'{output}; {description}'
         
-        if 'keyword' in errors:
+        if 'keyword' in error_types:
             output = self.styler.error(output)
         
         extra_lines = '\n'.join(task.get_all_extra_lines())
@@ -627,11 +628,9 @@ class SeqTask(Task):
         
         problems = False
         for task in unlogged:
-            errors = task.validate(self.jira)
-            for messages in errors.values():
+            for error in task.validate(self.jira):
                 problems = True
-                for msg in messages:
-                    self.stdout.write(f'{msg} for line "{task.trimmed_content}"', style='error')
+                self.stdout.write(error.get_log_message(self.styler))
         
         if problems:
             self.stdout.write(

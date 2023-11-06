@@ -225,6 +225,36 @@ class ParseError(Exception):
     pass
 
 
+class BlockProblem(Exception):
+    
+    def __init__(self, type, message, level='error', line=''):
+        
+        self.type = type
+        self.message = message
+        self.level = level
+        self.line = line
+        
+        super().__init__(level, type, message, line)
+    
+    def __str__(self):
+        
+        return self.get_log_message()
+    
+    def get_log_message(self, styler=None):
+        
+        prefix = f'[{self.level.upper()}]'
+        message = self.message
+        
+        if self.line:
+            message = f'{message} for line "{self.line}"'
+        
+        if styler:
+            styler = getattr(styler, self.level, styler.label)
+            prefix = styler(prefix)
+        
+        return f'{prefix} {message}'
+
+
 class LogbookEntry:
     """
     A parsed logbook entry for a Logseq block.
@@ -604,9 +634,9 @@ class WorkLogBlock(TaskBlock):
     
     def validate(self, jira):
         """
-        Validate the block's content and return a dictionary of errors, if any.
-        
-        The dictionary is keyed on the error type, one of:
+        Validate the block's content and return a list of BlockProblem
+        instances, if any. Each instance represents a problem of a certain
+        type:
         
         * ``'keyword'``: Errors that relate to the task keyword, such as the
           logbook timer still running.
@@ -615,23 +645,15 @@ class WorkLogBlock(TaskBlock):
         * ``'duration'``: Errors that relate to the work logged against the
           task, such as there not being any work logged at all.
         
-        The dictionary's values are lists of the error messages that apply to
-        each type.
-        
-        The dictionary will only contain keys for error types that actually
-        apply to the block. An empty dictionary indicates no errors were
-        encountered.
-        
         :param jira: A ``Jira`` instance for querying Jira via API.
-        :return: The errors dictionary.
+        :return: The error list.
         """
         
-        errors = {}
+        errors = []
         
         def add_error(error_type, error):
             
-            errors.setdefault(error_type, [])
-            errors[error_type].append(error)
+            errors.append(BlockProblem(error_type, error, line=self.trimmed_content))
         
         # Ensure the task's timer isn't currently running
         if self.keyword in ('NOW', 'DOING'):
@@ -967,10 +989,8 @@ class Journal(Block):
                 if isinstance(task, WorkLogBlock):
                     # Add any errors with the worklog definition to the
                     # journal's overall list of problems
-                    errors = task.validate(self.jira)
-                    for messages in errors.values():
-                        for msg in messages:
-                            problems.append(('error', f'{msg} for line "{task.trimmed_content}"'))
+                    for error in task.validate(self.jira):
+                        problems.append(('error', error))
             
             # Regardless of whether the task is logged or not, still include
             # it in totals calculations
