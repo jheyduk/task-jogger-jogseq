@@ -367,9 +367,13 @@ class Block:
             key, value = content.split('::', 1)
             
             if key in self.properties:
-                raise ParseError(
-                    f'Duplicate property "{key}" for block "{self.trimmed_content}". '
-                    f'Only the first "{key}" property will be retained.'
+                raise BlockProblem(
+                    type='property',
+                    level='warning',
+                    message=(
+                        f'Duplicate property "{key}" for block "{self.trimmed_content}".'
+                        f' Only the first "{key}" property will be retained.'
+                    )
                 )
             
             self.properties[key] = value.strip()
@@ -775,10 +779,14 @@ class Journal(Block):
             return None
         
         if len(matches) > 1:
-            problems.append(('warning', (
-                'Only a single miscellaneous block is supported per journal. '
-                'Subsequent miscellaneous blocks have no effect.'
-            )))
+            problems.append(BlockProblem(
+                type='misc',
+                level='warning',
+                message=(
+                    'Only a single miscellaneous block is supported per journal.'
+                    ' Subsequent miscellaneous blocks have no effect.'
+                )
+            ))
         
         self._misc_block = matches[0]
         
@@ -851,8 +859,8 @@ class Journal(Block):
                     # The line is a continuation of the current block
                     try:
                         current_block.add_line(content)
-                    except ParseError as e:
-                        self._problems.append(('warning', str(e)))
+                    except BlockProblem as e:
+                        self._problems.append(e)
                     
                     continue
                 
@@ -903,11 +911,14 @@ class Journal(Block):
         all_absent = len(presences) == 0
         all_present = len(presences) == 3
         if not all_absent and not all_present:
-            problems.append(('error', (
-                'Invalid journal properties.'
-                ' Either all or none of the "time-logged", "total-duration",'
-                ' and "switching-cost" properties must be present.'
-            )))
+            problems.append(BlockProblem(
+                type='property',
+                message=(
+                    'Invalid journal properties.'
+                    ' Either all or none of the "time-logged", "total-duration",'
+                    ' and "switching-cost" properties must be present.'
+                )
+            ))
             return False
         
         # No further validation is required if none of the properties are present
@@ -921,19 +932,25 @@ class Journal(Block):
             datetime.datetime.strptime(self.properties['time-logged'], '%Y-%m-%d %H:%M:%S')
         except ValueError:
             valid = False
-            problems.append(('error', (
-                'Invalid "time-logged" property.'
-                ' Expected a datetime in the format "YYYY-MM-DD HH:MM:SS".'
-            )))
+            problems.append(BlockProblem(
+                type='property',
+                message=(
+                    'Invalid "time-logged" property.'
+                    ' Expected a datetime in the format "YYYY-MM-DD HH:MM:SS".'
+                )
+            ))
         
         try:
             duration = parse_duration_input(self.properties['total-duration'])
         except ParseError:
             valid = False
-            problems.append(('error', (
-                'Invalid "total-duration" property.'
-                ' Expected a duration in human-friendly shorthand.'
-            )))
+            problems.append(BlockProblem(
+                type='property',
+                message=(
+                    'Invalid "total-duration" property.'
+                    ' Expected a duration in human-friendly shorthand.'
+                )
+            ))
         else:
             self.total_duration = duration
         
@@ -941,10 +958,13 @@ class Journal(Block):
             switching_cost = parse_duration_input(self.properties['switching-cost'])
         except ParseError:
             valid = False
-            problems.append(('error', (
-                'Invalid "switching-cost" property.'
-                ' Expected a duration in human-friendly shorthand.'
-            )))
+            problems.append(BlockProblem(
+                type='property',
+                message=(
+                    'Invalid "switching-cost" property.'
+                    ' Expected a duration in human-friendly shorthand.'
+                )
+            ))
         else:
             self.total_switching_cost = switching_cost
         
@@ -989,8 +1009,7 @@ class Journal(Block):
                 if isinstance(task, WorkLogBlock):
                     # Add any errors with the worklog definition to the
                     # journal's overall list of problems
-                    for error in task.validate(self.jira):
-                        problems.append(('error', error))
+                    problems.extend(task.validate(self.jira))
             
             # Regardless of whether the task is logged or not, still include
             # it in totals calculations
@@ -1023,9 +1042,13 @@ class Journal(Block):
             if misc_block:
                 misc_block.add_to_logbook(date, total_switching_cost)
             else:
-                problems.insert(0, (
-                    'warning',
-                    'No miscellaneous block found to log context switching cost against.'
+                problems.insert(0, BlockProblem(
+                    type='misc',
+                    level='warning',
+                    message=(
+                        'No miscellaneous block found to log context switching'
+                        ' cost against.'
+                    )
                 ))
         
         self.total_switching_cost = total_switching_cost

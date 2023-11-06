@@ -498,17 +498,8 @@ class SeqTask(Task):
         
         if show_problems and journal.problems:
             self.stdout.write('')  # blank line
-            
-            for level, msg in journal.problems:
-                if level == 'error':
-                    styler = self.styler.error
-                elif level == 'warning':
-                    styler = self.styler.warning
-                else:
-                    styler = self.styler.label
-                
-                prefix = styler(f'[{level.upper()}]')
-                self.stdout.write(f'{prefix} {msg}')
+            for msg in journal.problems:
+                self.stdout.write(msg.get_log_message(self.styler))
     
     def show_worklog_summary(self, task):
         
@@ -626,11 +617,9 @@ class SeqTask(Task):
             self.stdout.write('\nJournal contains no unlogged worklog entries to submit', style='warning')
             return
         
-        problems = False
-        for task in unlogged:
-            for error in task.validate(self.jira):
-                problems = True
-                self.stdout.write(error.get_log_message(self.styler))
+        problems = [e for task in unlogged for e in task.validate(self.jira)]
+        for p in problems:
+            self.stdout.write(p.get_log_message(self.styler))
         
         if problems:
             self.stdout.write(
