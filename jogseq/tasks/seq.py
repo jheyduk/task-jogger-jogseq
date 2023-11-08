@@ -48,11 +48,14 @@ class Return(Exception):
             raise Return(ttl=self.ttl - 1)
 
 
-class Menu(dict):
+class Menu:
     """
-    Dictionary subclass that is instantiated, not with key-value pairs, but
-    with an iterable of menu options. Each option is either a two- or three-
-    tuple:
+    Encapsulates a menu of numerically-ordered options that can be displayed
+    to the user to select from. The ``0`` option is reserved for a "return to
+    previous menu" option, though the text used for the option can be
+    configured with the ``return_option`` argument. The remaining options
+    are configured with the ``other_options`` argument, which should be an
+    iterable of either two- or three-tuples:
         
         (label, handler)
         OR
@@ -60,43 +63,76 @@ class Menu(dict):
     
     Where the values are:
     
-    - label: The label to display for the option
-    - handler: The function to call when the option is selected
-    - args: A tuple of arguments to pass to the handler function
-    
-    This `options` iterable is used to populate the dictionary, with the
-    keys being integers starting from 1, and the values being dictionaries
-    themselves, with the following keys:
-    
-    - handler: The handler function
-    - args: The arguments to pass to the handler function. Only present if the
-        three-tuple form of the option was used.
-    
-    The 0 key is reserved for the "return to previous menu" option. Accessing
-    this key will raise a `Return` exception.
+    - ``label``: The label to display for the option
+    - ``handler``: The function to call when the option is selected
+    - ``args``: A tuple of arguments to pass to the handler function
     """
     
-    def __init__(self, options):
+    def __init__(self, return_option, other_options):
         
         super().__init__()
         
-        for i, option in enumerate(options, start=1):
-            self[i] = {
+        self.return_option = return_option
+        self.other_options = other_options
+        
+        handlers = {}
+        for i, option in enumerate(other_options, start=1):
+            handlers[i] = {
                 'handler': option[1]
             }
             
             try:
-                self[i]['args'] = option[2]
+                handlers[i]['args'] = option[2]
             except IndexError:  # args are optional
                 pass
-    
-    def __getitem__(self, key):
         
-        # The 0 option is always "return to the previous menu"
-        if key == 0:
+        self.handlers = handlers
+    
+    def get_display(self):
+        """
+        Return a string that can be printed to display the full menu.
+        """
+        
+        options = []
+        
+        for i, option in enumerate(self.other_options, start=1):
+            label = option[0]
+            options.append(f'{i}. {label}')
+        
+        options.append(f'0. {self.return_option}')
+        
+        return '\n'.join(options)
+    
+    def prompt(self):
+        """
+        Prompt the user for a number corresponding to one of the menu options.
+        
+        For options other than ``0``, return the handler configuration for the
+        selected option, as a dictionary containing:
+        - ``handler``: The handler function
+        - ``args``: The arguments to pass to the handler function. Only
+            present if the three-tuple form of the option was used when
+            instantiating the Menu.
+        
+        If ``0`` is selected, raise ``Return`` instead, to trigger a return to
+        the previous menu. Also raise ``ValueError`` if the input is not a
+        valid number, and ``IndexError`` if the number does not correspond
+        to a valid menu option.
+        
+        :return: The handler dictionary for the selected option.
+        """
+        
+        try:
+            selection = input('\nChoose an option: ')
+        except KeyboardInterrupt:
+            selection = 0
+        
+        selection = int(selection)  # allow potential ValueError to propagate
+        
+        if selection == 0:  # always "return to the previous menu"
             raise Return()
         
-        return super().__getitem__(key)
+        return self.handlers[selection]  # allow potential IndexError to propagate
 
 
 class SwitchingCostScale:
@@ -308,26 +344,16 @@ class SeqTask(Task):
                 - args: A tuple of arguments to pass to the handler function
         """
         
-        menu = Menu(other_options)
+        menu = Menu(return_option, other_options)
         
         while True:
             self.stdout.write(intro, style='label')
-            
-            for i, option in enumerate(other_options, start=1):
-                label = option[0]
-                self.stdout.write(f'{i}. {label}')
-            
-            self.stdout.write(f'0. {return_option}')
+            self.stdout.write(menu.get_display())
             
             selected_option = None
             while not selected_option:
                 try:
-                    selection = input('\nChoose an option: ')
-                except KeyboardInterrupt:
-                    selection = 0
-                
-                try:
-                    selected_option = menu[int(selection)]
+                    selected_option = menu.prompt()
                 except (ValueError, IndexError):
                     self.stdout.write('Invalid selection.', style='error')
             
