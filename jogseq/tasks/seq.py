@@ -1,3 +1,5 @@
+import readline  # isort:skip # noqa # enable arrow key support in input()
+
 import datetime
 import math
 from getpass import getpass
@@ -361,6 +363,26 @@ class SeqTask(Task):
             self.stdout.write('No action taken.')
             raise Return()
     
+    def show_return_prompt(self, main_ttl=1):
+        """
+        Display a prompt asking the user whether to return to the main menu
+        or the immediate parent menu. Raise ``Return`` either way, but use
+        the given ``main_ttl`` if the user chooses to return to the main menu.
+        
+        :param main_ttl: The ``ttl`` value to pass to ``Return`` when
+            returning to the main menu.
+        """
+        
+        try:
+            answer = input('Return to main menu [Y/n] (default=Y)? ')
+        except KeyboardInterrupt:
+            answer = ''  # yes
+        
+        if answer.lower() in ('y', ''):
+            raise Return(ttl=main_ttl)
+        
+        raise Return()
+    
     def parse_journal(self, journal=None, date=None, show_summary=False):
         """
         Parse a Logseq journal file and return a `Journal` object. Can either
@@ -682,6 +704,10 @@ class SeqTask(Task):
         journal.set_fully_logged(update_worklogs=False)
         
         journal.write_back()
+        
+        self.stdout.write('\nJournal file updated.', style='success')
+        
+        self.show_return_prompt()
     
     def handle_log_work__mark_logged(self, journal):
         
@@ -733,19 +759,11 @@ class SeqTask(Task):
         
         self.show_confirmation_prompt('Are you sure you wish to continue')
         
-        if journal.problems:
-            self.stdout.write(
-                '\nProblems were found parsing this journal. Continuing may'
-                ' result in data loss when updating the journal file.'
-            )
-            
-            self.show_confirmation_prompt('Are you REALLY sure you wish to continue')
-        
         journal.write_back()
         
         self.stdout.write('\nJournal file updated.', style='success')
-        input('Hit ENTER to return to the main menu...')
-        raise Return(ttl=1)  # skip "log work" menu and return to main menu
+        
+        self.show_return_prompt()
     
     def handle_log_work__reparse_journal(self, journal):
         
