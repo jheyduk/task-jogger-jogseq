@@ -1,29 +1,14 @@
 import readline  # isort:skip # noqa # enable arrow key support in input()
 
 import datetime
-import math
 from getpass import getpass
 from os import path
 
 from jogger.tasks import Task
 
-from ..utils.logseq import DurationContext, Journal, format_duration
+from ..utils.duration import DurationContext, SwitchingCostScale, format_duration
 from ..utils.jira import Jira, JIRAError
-
-
-def set_duration_interval(interval):
-    
-    try:
-        interval = int(interval)
-    except ValueError:
-        pass
-    
-    if interval == 1:
-        DurationContext.rounding_interval = DurationContext.ONE_MINUTE
-    elif interval == 5:
-        DurationContext.rounding_interval = DurationContext.FIVE_MINUTES
-    else:
-        raise ValueError('Duration interval must be either 1 or 5.')
+from ..utils.logseq import Block, Journal
 
 
 class Return(Exception):
@@ -135,96 +120,6 @@ class Menu:
         return self.handlers[selection]  # allow potential IndexError to propagate
 
 
-class SwitchingCostScale:
-    """
-    Helper object for containing scaling switching cost details and calculating
-    estimated switching costs for given task durations.
-    """
-    
-    def __init__(self, cost_range, duration_range):
-        
-        # Convert duration min/max given in minutes to seconds
-        min_duration, max_duration = duration_range
-        self.min_duration = min_duration * 60
-        self.max_duration = max_duration * 60
-        
-        # Convert switching cost min/max given in minutes to seconds
-        min_cost, max_cost = self._extract_costs(cost_range)
-        self.min_cost = min_cost * 60
-        self.max_cost = max_cost * 60
-        
-        if min_cost == max_cost:
-            # There is no range of switching costs, only a single value. No
-            # sliding scale needs to be used.
-            self.cost_scale = None
-            self.duration_step = None
-        else:
-            # Store a list of the full range of switching costs, in seconds
-            self.cost_scale = [i * 60 for i in range(min_cost, max_cost + 1)]
-            
-            # Calculate the "duration step" - the number of seconds of a duration
-            # between each switching cost in the above scale. E.g. there may be
-            # 5 minutes (300 seconds) worth of duration between each switching cost
-            # (10 minutes of duration may incur a 2 minute switching cost, and 15
-            # minutes of duration may incur a 3 minute switching cost, etc).
-            cost_diff = max_cost - min_cost
-            duration_diff = max_duration - min_duration
-            self.duration_step = math.ceil(duration_diff / cost_diff) * 60
-    
-    def _extract_costs(self, cost_range):
-        
-        invalid_msg = (
-            'Invalid config: Switching cost must be a range of minutes,'
-            ' e.g. 1-15, 5-30, etc.'
-        )
-        
-        try:
-            min_cost, max_cost = cost_range.split('-')
-            min_cost, max_cost = int(min_cost), int(max_cost)
-        except ValueError:
-            raise ValueError(invalid_msg)
-        
-        if min_cost < 0 or min_cost > max_cost:
-            raise ValueError(invalid_msg)
-        
-        # Find the maximum span of a switching cost range that can be
-        # configured for the given duration range. The span of switching
-        # costs must be under half that of the duration. E.g. a duration
-        # range of 0-60 minutes supports a maximum switching cost span of
-        # 30 minutes. That could mean a range of 0-30 minutes, 15-45
-        # minutes, etc. Shorter spans are valid as well, this only
-        # gives the maximum possible.
-        max_range = int((self.max_duration - self.min_duration) / 60 / 2)
-        
-        if max_cost - min_cost > max_range:
-            raise ValueError(
-                'Invalid config: Switching cost must be a range spanning no'
-                f' more than {max_range} minutes.'
-            )
-        
-        return min_cost, max_cost
-    
-    def for_duration(self, duration):
-        """
-        Return the switching cost for the given duration, in seconds.
-        """
-        
-        if not self.cost_scale:
-            # There is only a single switching cost, so use that
-            return self.min_cost
-        
-        # Calculate the appropriate switching cost based on a sliding scale
-        # relative to the given duration. If the duration exceeds the bounds
-        # of the scale, use the min/max switching cost as appropriate.
-        if duration <= self.min_duration:
-            return self.min_cost
-        elif duration >= self.max_duration:
-            return self.max_cost
-        else:
-            index = duration // self.duration_step
-            return self.cost_scale[index]
-
-
 class SeqTask(Task):
     
     DEFAULT_TARGET_DURATION = 7 * 60  # 7 hours
@@ -275,7 +170,7 @@ class SeqTask(Task):
         
         # Verify remaining settings
         try:
-            set_duration_interval(self.settings.get('duration_interval', 1))
+            DurationContext.set_rounding_interval(self.settings.get('duration_interval', 1))
             self.get_target_duration()
             self.get_mark_done_when_logged()
         except ValueError as e:

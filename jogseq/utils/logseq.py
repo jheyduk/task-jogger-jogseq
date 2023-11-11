@@ -2,6 +2,11 @@ import datetime
 import os
 import re
 
+from .duration import (
+    format_duration, parse_duration_input, parse_duration_timestamp,
+    round_duration
+)
+
 # Recognise issue IDs as one or more letters, followed by a hyphen, followed
 # by one or more digits. The ID may optionally be wrapped in double square
 # brackets, and optionally be followed by a colon.
@@ -28,124 +33,6 @@ LINK_RE = re.compile(r'\[\[(.*?)\]\]')
 # When content lines are trimmed (e.g. when displayed in error messages),
 # trim to this length
 BLOCK_CONTENT_TRIM_LENGTH = 50
-
-
-class DurationContext:
-    """
-    An object containing context around how duration-related operations should
-    be performed. The context can be updated to affect the operations globally.
-    """
-    
-    # Possible rounding intervals. Each interval is a two-tuple of the
-    # interval in seconds, and the number of seconds into the next interval
-    # that a duration must be before it is rounded up.
-    ONE_MINUTE = (60, 30)
-    FIVE_MINUTES = (300, 90)
-    
-    rounding_interval = FIVE_MINUTES
-
-
-def parse_duration_timestamp(timestamp_str):
-    """
-    Return the number of seconds represented by the given duration timestamp
-    string. The string should be in the format "H:M:S", representing the hours,
-    minutes, and seconds comprising the duration.
-    
-    :param timestamp_str: The duration timestamp string.
-    :return: The number of seconds represented by the duration timestamp string.
-    """
-    
-    # Extract hours, minutes, and seconds from the string and cast as integers
-    hours, minutes, seconds = map(int, timestamp_str.split(':'))
-    
-    # Convert the duration into seconds
-    return hours * 3600 + minutes * 60 + seconds
-
-
-def parse_duration_input(input_str):
-    """
-    Return the number of seconds represented by the given duration input string.
-    The string should be in the format "Xh Ym", representing the hours and
-    minutes comprising the duration.
-    
-    :param input_str: The duration input string.
-    :return: The number of seconds represented by the duration input string.
-    """
-    
-    # Extract hours and minutes from the string and cast as integers
-    parts = input_str.split()
-    hours, minutes = 0, 0
-    for part in parts:
-        if part.endswith('h'):
-            hours = int(part[:-1])
-        elif part.endswith('m'):
-            minutes += int(part[:-1])
-        else:
-            raise ParseError('Invalid duration string format. Only hours and minutes are supported.')
-    
-    # Convert the duration into seconds
-    return hours * 3600 + minutes * 60
-
-
-def round_duration(total_seconds):
-    """
-    Round the given number of seconds as dictated by ``DurationContext`` and
-    return the new value in seconds. Values will never be rounded down to 0,
-    and values that are already 0 will never be rounded up.
-    
-    :param total_seconds: The duration to round, in seconds.
-    :return: The rounded value, in seconds.
-    """
-    
-    interval, rounding_point = DurationContext.rounding_interval
-    
-    # If a zero duration, report it as such. But for other durations less
-    # than the interval, report the interval as a minimum instead.
-    if not total_seconds:
-        return 0
-    elif total_seconds < interval:
-        return interval
-    
-    # Round to the most appropriate interval
-    base, remainder = divmod(total_seconds, interval)
-    
-    duration = interval * base
-    
-    # Round up if the remainder is at or over the rounding point
-    if remainder >= rounding_point:
-        duration += interval
-    
-    return duration
-
-
-def format_duration(total_seconds):
-    """
-    Return a human-readable string describing the given duration in hours,
-    minutes, and seconds. E.g. 1h 30m.
-    
-    :param total_seconds: The duration, in seconds.
-    :return: The string representation of the duration.
-    """
-    
-    # Calculate hours, minutes, and seconds
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    
-    # Create the formatted duration string
-    parts = []
-    if hours > 0:
-        parts.append(f'{hours}h')
-    if minutes > 0:
-        parts.append(f'{minutes}m')
-    if seconds > 0:
-        parts.append(f'{seconds}s')
-    
-    if not parts:
-        # The most common unit is minutes, so for durations of zero, report
-        # it as 0 minutes.
-        return '0m'
-    
-    return ' '.join(parts)
 
 
 def sanitise(content):
@@ -215,14 +102,6 @@ def get_block_class(content):
         block_cls = TaskBlock
     
     return block_cls
-
-
-class ParseError(Exception):
-    """
-    Raised when an unresolvable issue is encountered when parsing a journal.
-    """
-    
-    pass
 
 
 class BlockProblem(Exception):
@@ -570,7 +449,7 @@ class TaskBlock(Block):
         # Otherwise remove it and replace it with a logbook entry.
         try:
             time_value = parse_duration_input(time_value)
-        except ParseError:
+        except ValueError:
             pass
         else:
             del self.properties['time']
@@ -942,7 +821,7 @@ class Journal(Block):
         
         try:
             duration = parse_duration_input(self.properties['total-duration'])
-        except ParseError:
+        except ValueError:
             valid = False
             problems.append(BlockProblem(
                 type='property',
@@ -956,7 +835,7 @@ class Journal(Block):
         
         try:
             switching_cost = parse_duration_input(self.properties['switching-cost'])
-        except ParseError:
+        except ValueError:
             valid = False
             problems.append(BlockProblem(
                 type='property',
