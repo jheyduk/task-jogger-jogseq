@@ -304,6 +304,24 @@ class SeqTask(Task):
         
         raise Return()
     
+    def get_date_from_offset(self, prompt, default=0):
+        
+        offset = input(f'{prompt} (default={default}): ')
+        if not offset:
+            offset = default
+        
+        try:
+            offset = int(offset)
+        except ValueError:
+            self.stdout.write('Offset must be a positive integer.', style='error')
+            return None
+        
+        if offset < 0:
+            self.stdout.write('Offset must be a positive integer.', style='error')
+            return None
+        
+        return datetime.date.today() - datetime.timedelta(days=offset)
+    
     def parse_journal(self, journal=None, date=None, show_summary=False):
         """
         Parse a Logseq journal file and return a `Journal` object. Can either
@@ -499,21 +517,9 @@ class SeqTask(Task):
         
         journal = None
         while not journal:
-            offset = input('\nOffset (default=0): ')
-            if not offset:
-                offset = 0  # default to "today"
-            
-            try:
-                offset = int(offset)
-            except ValueError:
-                self.stdout.write('Offset must be a positive integer.', style='error')
+            date = self.get_date_from_offset(prompt='\nOffset', default=0)  # default to "today"
+            if not date:
                 continue
-            
-            if offset < 0:
-                self.stdout.write('Offset must be a positive integer.', style='error')
-                continue
-            
-            date = datetime.date.today() - datetime.timedelta(days=offset)
             
             self.stdout.write('')  # blank line
             journal = self.parse_journal(date=date, show_summary=True)
