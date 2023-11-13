@@ -201,9 +201,8 @@ class Block:
     
     is_simple_block = True
     
-    def __init__(self, indent, content, parent=None):
+    def __init__(self, content, parent=None):
         
-        self.indent = indent
         self.parent = parent
         
         self.content = content.replace('-', '', 1).strip()
@@ -609,7 +608,7 @@ class Journal(Block):
     
     def __init__(self, graph_path, date, switching_scale, jira):
         
-        super().__init__(indent=-1, content='', parent=None)
+        super().__init__(content='', parent=None)
         
         self.date = date
         self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
@@ -727,6 +726,9 @@ class Journal(Block):
         self.unloggable_duration = None
         self.total_switching_cost = None
         
+        # Set a dummy indent level to simplify the below parsing
+        self.indent = -1
+        
         current_block = self
         
         with open(self.path, 'r') as f:
@@ -761,7 +763,11 @@ class Journal(Block):
                     
                     parent_block = current_block
                 
-                current_block = block_cls(indent, content, parent_block)
+                current_block = block_cls(content, parent_block)
+                
+                # Annotate the block with its indent level, to use in the
+                # above comparisons on the next iteration
+                current_block.indent = indent
         
         valid = self._validate_properties()
         
