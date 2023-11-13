@@ -141,7 +141,8 @@ class SeqTask(Task):
             self.show_menu(
                 '\nChoose one of the following commands to execute:',
                 'Exit (or Ctrl+C)',
-                ('Log work to Jira', self.handle_log_work)
+                ('Log work to Jira', self.handle_log_work),
+                ('[incomplete] Summarise journals', self.handle_summarise_journals)
             )
         except Return:
             # The main menu was used to exit the program
@@ -504,7 +505,7 @@ class SeqTask(Task):
             raise Return()
     
     #
-    # Menu option handlers
+    # Log work
     #
     
     def handle_log_work(self):
@@ -696,3 +697,35 @@ class SeqTask(Task):
         
         self.stdout.write('')  # blank line
         self.parse_journal(journal=journal, show_summary=True)
+    
+    #
+    # Summarise journals
+    #
+    
+    def handle_summarise_journals(self):
+        
+        self.stdout.write(
+            '\nChoose a date range to summarise.'
+            ' Defaults to the last 7 days, including today.',
+            style='label'
+        )
+        self.stdout.write(
+            'Enter two offsets from the current day. '
+            'E.g. 0 = today, 1 = yesterday, 2 = the day before, etc.'
+        )
+        
+        max_date = None
+        while not max_date:
+            max_date = self.get_date_from_offset(prompt='End offset', default=0)
+        
+        min_date = None
+        while not min_date:
+            min_date = self.get_date_from_offset(prompt='Start offset', default=6)
+        
+        max_date_str = self.styler.label(max_date.strftime('%y-%m-%d'))
+        min_date_str = self.styler.label(min_date.strftime('%y-%m-%d'))
+        self.stdout.write(f'\nSummarising journals between {min_date_str} and {max_date_str}…')
+        
+        # TODO: Summarise journals
+        
+        self.stdout.write('Not yet implemented.', style='error')
