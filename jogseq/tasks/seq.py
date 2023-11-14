@@ -8,7 +8,7 @@ from jogger.tasks import Task
 
 from ..utils.duration import DurationContext, SwitchingCostScale, format_duration
 from ..utils.jira import Jira, JIRAError
-from ..utils.logseq import Block, Journal
+from ..utils.logseq import Block, Journal, Page
 
 
 class Return(Exception):
@@ -701,6 +701,84 @@ class SeqTask(Task):
     #
     # Summarise journals
     #
+    
+    def _build_worklog_digest(self, start_date, end_date):
+        
+        total_duration = 0
+        total_count = 0
+        skip_counts = {
+            'misc': 0,
+            'no_content': 0
+        }
+        
+        # Build up a map of Jira issue IDs to Blocks that summarise the work
+        # done for those issues
+        issue_blocks = {}
+        
+        next_date = start_date
+        while next_date <= end_date:
+            journal = self.parse_journal(date=next_date)
+            next_date += datetime.timedelta(days=1)
+            
+            if not journal:
+                continue
+            
+            for entry in journal.worklogs:
+                total_count += 1
+                
+                entry_duration = entry.get_total_duration()
+                total_duration += entry_duration
+                
+                if 'misc' in entry.properties:
+                    skip_counts['misc'] += 1
+                    continue
+                elif not entry.description and not entry.get_all_extra_lines():
+                    skip_counts['no_content'] += 1
+                    continue
+                
+                # If this is the first time this Jira issue has been seen in
+                # the given range, create a parent Block for it
+                issue_id = entry.issue_id
+                if issue_id not in issue_blocks:
+                    issue_block = Block(content=f'- {issue_id}:')
+                    issue_blocks[issue_id] = issue_block
+                    
+                    # Add a `duration` property to track the total duration
+                    # of all worklogs added to the issue
+                    issue_block.properties['duration'] = 0
+                
+                # Create a new Block for this entry, with summarised content,
+                # nested under the issue ID block
+                content = f'- {journal.date:%Y-%m-%d}: {entry.sanitised_content}'
+                block = Block(content=content, parent=issue_blocks[issue_id])
+                block.continuation_lines = entry.continuation_lines
+                block.children = entry.children
+                block.parent.properties['duration'] += entry_duration
+        
+        page = Page(self.settings['graph_path'], 'Worklog Digest')
+        
+        date_format = '%a, %Y-%m-%d'
+        page.properties = {
+            'from-date': start_date.strftime(date_format),
+            'to-date': end_date.strftime(date_format),
+            'total-worklogs': total_count,
+            'total-duration': format_duration(total_duration)
+        }
+        
+        # Don't add skip counts as properties, as they don't need to be written
+        # to the markdown file, but annotate them onto the Page object for use
+        # by the caller
+        page.skip_counts = skip_counts
+        
+        # Add issue blocks as children of the page, in order of issue ID
+        for issue_id in sorted(issue_blocks):
+            block = issue_blocks[issue_id]
+            page.children.append(block)
+            
+            # Format the `duration` property for display
+            block.properties['duration'] = format_duration(block.properties['duration'])
+        
+        return page
     
     def handle_summarise_journals(self):
         
