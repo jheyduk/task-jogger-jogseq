@@ -581,16 +581,126 @@ class WorkLogBlock(TaskBlock):
             self.keyword = 'DONE'
 
 
-class Journal(Block):
+class Page(Block):
+    """
+    A parsed Logseq page.
+    
+    Pages are much the same as regular blocks, except they don't have a
+    primary content line. Most other features are applicable: continuation
+    lines, properties, child blocks, etc. Pages cannot also be tasks.
+    
+    Pages are responsible for parsing their own markdown file, and can also
+    write back to their markdown file, persisting any changes made to the page
+    and its child blocks programmatically.
+    """
+    
+    subdirectory = 'pages'
+    
+    def __init__(self, graph_path, title):
+        
+        super().__init__(content='', parent=None)
+        
+        self.title = title
+        self.path = os.path.join(graph_path, self.subdirectory, f'{title}.md')
+        
+        self._problems = None
+    
+    @property
+    def problems(self):
+        """
+        A list of ``BlockProblem`` instances describing problems present
+        in the page.
+        """
+        
+        if self._problems is None:
+            raise Exception('Page not parsed.')
+        
+        return self._problems
+    
+    def parse(self):
+        """
+        Using the page's configured base graph path and title, locate and
+        parse the markdown file, and populate the page's attributes with
+        the parsed data.
+        """
+        
+        # In the event of re-parsing the page, reset all relevant attributes
+        self.properties = {}
+        self.continuation_lines = []
+        self.children = []
+        self._problems = []
+        
+        # Set a dummy indent level for the page itself to simplify the
+        # comparisons in the below parsing iteration
+        self.indent = -1
+        
+        current_block = self
+        
+        with open(self.path, 'r') as f:
+            for line in f.readlines():
+                indent = line.count('\t')
+                content = line.strip()
+                
+                if not content.startswith('-'):
+                    # The line is a continuation of the current block
+                    try:
+                        current_block.add_line(content)
+                    except BlockProblem as e:
+                        self._problems.append(e)
+                    
+                    continue
+                
+                block_cls = get_block_class(content)
+                
+                if indent > current_block.indent:
+                    # The line is a child block of the current block
+                    parent_block = current_block
+                elif indent == current_block.indent:
+                    # The line is a sibling block of the current block
+                    parent_block = current_block.parent
+                else:
+                    # The line is a new block at a higher level than the
+                    # current block. Step back through the current block's
+                    # parents to the appropriate level and add a new child
+                    # block there.
+                    while indent <= current_block.indent:
+                        current_block = current_block.parent
+                    
+                    parent_block = current_block
+                
+                current_block = block_cls(content, parent_block)
+                
+                # Annotate the block with its indent level, to use in the
+                # above comparisons on the next iteration
+                current_block.indent = indent
+    
+    def write_back(self):
+        """
+        Using the page's configured base graph path and title, write back to
+        the corresponding markdown file.
+        """
+        
+        with open(self.path, 'w') as f:
+            # The journal's extra lines include its own properties and
+            # continuation lines, but also its children, recursively -
+            # effectively the journal's entire content.
+            # Passing `use_indentation=False` ensures the journal's top-level
+            # properties, continuation lines, and blocks are not indented, but
+            # nested children are.
+            # Passing `simple_output=False` includes all elements of each
+            # child block in full - nothing is skipped or sanitised as it
+            # is for short task descriptions.
+            for line in self.get_all_extra_lines(use_indentation=False, simple_output=False):
+                f.write(f'{line}\n')
+
+
+class Journal(Page):
     """
     A parsed Logseq journal for a given date.
     
-    Journals are much the same as regular blocks, except they don't have a
-    primary content line. Most other features are applicable: continuation
-    lines, properties, child blocks, etc. Journals cannot also be tasks.
-    
-    Journals are responsible for parsing their own markdown file, and for
-    collating and processing the task and worklog blocks contained within.
+    In addition to just parsing basic Page features like properties and child
+    blocks, Journals also collate and process the task and worklog blocks
+    they contain.
     This processing includes:
     
     * Calculating the total duration of work logged to the journal's tasks.
@@ -600,42 +710,25 @@ class Journal(Block):
     * Tracking an optional "miscellaneous" worklog block, to which the estimated
       context switching cost can be logged. Only a single miscellaneous worklog
       block can exist per journal.
-    
-    Journals can also write back to their markdown file, persisting any changes
-    made to the journal and its child blocks, including added properties,
-    additional logbook entries, etc.
     """
+    
+    subdirectory = 'journals'
     
     def __init__(self, graph_path, date, switching_scale, jira):
         
-        super().__init__(content='', parent=None)
+        super().__init__(graph_path, title=date.strftime('%Y_%m_%d'))
         
         self.date = date
-        self.path = os.path.join(graph_path, 'journals', f'{date:%Y_%m_%d}.md')
         self.switching_scale = switching_scale
         self.jira = jira
         
         self._misc_block = None
-        self._problems = None
         self._tasks = None
         
         self.is_fully_logged = False
         self.total_duration = None
         self.unloggable_duration = None
         self.total_switching_cost = None
-    
-    @property
-    def problems(self):
-        """
-        A list of problems present in the journal. Each item in the list is
-        a two-tuple of the form ``(type, message)``, where ``type`` is one of
-        ``'error'`` or ``'warning'``.
-        """
-        
-        if self._problems is None:
-            raise Exception('Journal not parsed.')
-        
-        return self._problems
     
     @property
     def misc_block(self):
@@ -708,66 +801,16 @@ class Journal(Block):
         return [wl for wl in self.worklogs if 'logged' not in wl.properties]
     
     def parse(self):
-        """
-        Using the journal's configured base graph path and date, locate and
-        parse the markdown file for the matching Logseq journal entry. Parsing
-        this file populates the journal's attributes with the parsed data.
-        """
         
         # In the event of re-parsing the journal, reset all relevant attributes
-        self.properties = {}
-        self.continuation_lines = []
-        self.children = []
         self._misc_block = None
-        self._problems = []
         self._tasks = []
         self.is_fully_logged = False
         self.total_duration = None
         self.unloggable_duration = None
         self.total_switching_cost = None
         
-        # Set a dummy indent level to simplify the below parsing
-        self.indent = -1
-        
-        current_block = self
-        
-        with open(self.path, 'r') as f:
-            for line in f.readlines():
-                indent = line.count('\t')
-                content = line.strip()
-                
-                if not content.startswith('-'):
-                    # The line is a continuation of the current block
-                    try:
-                        current_block.add_line(content)
-                    except BlockProblem as e:
-                        self._problems.append(e)
-                    
-                    continue
-                
-                block_cls = get_block_class(content)
-                
-                if indent > current_block.indent:
-                    # The line is a child block of the current block
-                    parent_block = current_block
-                elif indent == current_block.indent:
-                    # The line is a sibling block of the current block
-                    parent_block = current_block.parent
-                else:
-                    # The line is a new block at a higher level than the
-                    # current block. Step back through the current block's
-                    # parents to the appropriate level and add a new child
-                    # block there.
-                    while indent <= current_block.indent:
-                        current_block = current_block.parent
-                    
-                    parent_block = current_block
-                
-                current_block = block_cls(content, parent_block)
-                
-                # Annotate the block with its indent level, to use in the
-                # above comparisons on the next iteration
-                current_block.indent = indent
+        super().parse()
         
         valid = self._validate_properties()
         
@@ -968,24 +1011,3 @@ class Journal(Block):
         
         # Record the current timestamp as the time the journal was logged
         self.properties['time-logged'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    def write_back(self):
-        """
-        Using the journal's configured base graph path and date, write back to
-        the corresponding markdown file for the matching Logseq journal entry.
-        This persists all modifications made to the Journal and its child
-        blocks, including added properties, additional logbook entries, etc.
-        """
-        
-        with open(self.path, 'w') as f:
-            # The journal's extra lines include its own properties and
-            # continuation lines, but also its children, recursively -
-            # effectively the journal's entire content.
-            # Passing `use_indentation=False` ensures the journal's top-level
-            # properties, continuation lines, and blocks are not indented, but
-            # nested children are.
-            # Passing `simple_output=False` includes all elements of each
-            # child block in full - nothing is skipped or sanitised as it
-            # is for short task descriptions.
-            for line in self.get_all_extra_lines(use_indentation=False, simple_output=False):
-                f.write(f'{line}\n')

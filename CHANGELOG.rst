@@ -1,6 +1,11 @@
 Change Log
 ==========
 
+0.3.0 (unreleased)
+------------------
+
+* Add support for parsing/writing Logseq pages (in addition to journals)
+
 0.2.0 (2023-11-01)
 ------------------
 
