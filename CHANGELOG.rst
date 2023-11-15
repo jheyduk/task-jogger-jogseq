@@ -5,6 +5,7 @@ Change Log
 ------------------
 
 * Add support for parsing/writing Logseq pages (in addition to journals)
+* ``SeqTask``: Add support for summarising the journals in a specified date range
 
 0.2.0 (2023-11-01)
 ------------------

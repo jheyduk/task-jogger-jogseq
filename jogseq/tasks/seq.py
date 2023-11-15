@@ -142,7 +142,7 @@ class SeqTask(Task):
                 '\nChoose one of the following commands to execute:',
                 'Exit (or Ctrl+C)',
                 ('Log work to Jira', self.handle_log_work),
-                ('[incomplete] Summarise journals', self.handle_summarise_journals)
+                ('Summarise journals', self.handle_summarise_journals)
             )
         except Return:
             # The main menu was used to exit the program
@@ -792,18 +792,43 @@ class SeqTask(Task):
             'E.g. 0 = today, 1 = yesterday, 2 = the day before, etc.'
         )
         
-        max_date = None
-        while not max_date:
-            max_date = self.get_date_from_offset(prompt='End offset', default=0)
+        end_date = None
+        while not end_date:
+            end_date = self.get_date_from_offset(prompt='End offset', default=0)
         
-        min_date = None
-        while not min_date:
-            min_date = self.get_date_from_offset(prompt='Start offset', default=6)
+        start_date = None
+        while not start_date:
+            start_date = self.get_date_from_offset(prompt='Start offset', default=6)
         
-        max_date_str = self.styler.label(max_date.strftime('%y-%m-%d'))
-        min_date_str = self.styler.label(min_date.strftime('%y-%m-%d'))
-        self.stdout.write(f'\nSummarising journals between {min_date_str} and {max_date_str}…')
+        end_date_str = self.styler.label(end_date.strftime('%y-%m-%d'))
+        start_date_str = self.styler.label(start_date.strftime('%y-%m-%d'))
+        self.stdout.write(f'\nSummarising journals between {start_date_str} and {end_date_str}…')
         
-        # TODO: Summarise journals
+        digest_page = self._build_worklog_digest(start_date, end_date)
         
-        self.stdout.write('Not yet implemented.', style='error')
+        properties = digest_page.properties
+        total_count_str = self.styler.label(properties['total-worklogs'])
+        total_duration_str = self.styler.label(properties['total-duration'])
+        self.stdout.write(f'\nFound {total_count_str} worklog entries totalling {total_duration_str}')
+        
+        skip_counts = digest_page.skip_counts
+        misc_count_str = self.styler.label(skip_counts['misc'])
+        no_content_count_str = self.styler.label(skip_counts['no_content'])
+        self.stdout.write(f'Skipped {misc_count_str} "miscellaneous" entries')
+        self.stdout.write(f'Skipped {no_content_count_str} entries without content')
+        
+        leftovers = properties['total-worklogs'] - sum(skip_counts.values())
+        if not leftovers:
+            self.stdout.write('\nNothing left to summarise', style='warning')
+            return
+        
+        leftovers_str = self.styler.label(leftovers)
+        issue_count_str = self.styler.label(len(digest_page.children))
+        self.stdout.write(f'\nRemaining {leftovers_str} entries for {issue_count_str} issues summarised')
+        
+        digest_page.write_back()
+        
+        self.stdout.write(
+            f'\nSummary written to the {digest_page.title} page in your Logseq graph',
+            style='success'
+        )
