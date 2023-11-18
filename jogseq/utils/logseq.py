@@ -604,6 +604,7 @@ class Page(Block):
         self.path = os.path.join(graph_path, self.subdirectory, f'{title}.md')
         
         self._problems = None
+        self._validated = False
     
     @property
     def problems(self):
@@ -612,8 +613,8 @@ class Page(Block):
         in the page.
         """
         
-        if self._problems is None:
-            raise Exception('Page not parsed.')
+        if not self._validated:
+            raise Exception('Page not validated.')
         
         return self._problems
     
@@ -673,6 +674,15 @@ class Page(Block):
                 # Annotate the block with its indent level, to use in the
                 # above comparisons on the next iteration
                 current_block.indent = indent
+    
+    def validate(self):
+        """
+        Validate the page's content and populate the `problems` property with
+        any problems that are found.
+        """
+        
+        # Do nothing by default except flag the Page has having been validated
+        self._validated = True
     
     def write_back(self):
         """
@@ -812,10 +822,64 @@ class Journal(Page):
         
         super().parse()
         
-        valid = self._validate_properties()
+        #
+        # Process the parsed tasks/worklogs to:
+        # * Calculate the total duration of work logged
+        # * Calculate the total estimated context switching cost, based on
+        #   the duration of the tasks and a sliding scale of switching costs,
+        #   represented by the given `switching_scale`.
+        # * Convert any `time::` properties on the tasks into logbook entries.
+        #
         
-        if valid:
-            self._process_tasks()
+        date = self.date
+        all_tasks = self._tasks = find_tasks(self)
+        misc_block = self.misc_block
+        
+        total_duration = 0
+        unloggable_duration = 0
+        total_switching_cost = 0
+        switching_scale = self.switching_scale
+        
+        for task in all_tasks:
+            # Convert any time:: properties to logbook entries as long as the
+            # task isn't a previously-logged worklog entry
+            if 'logged' not in task.properties:
+                task.convert_time_property(date)
+            
+            # Regardless of whether the task is logged or not, still include
+            # it in totals calculations
+            
+            # Taking into account any above-converted time:: properties,
+            # calculate the task's duration and add it to the journal's
+            # total duration
+            task_duration = task.get_total_duration()
+            total_duration += task_duration
+            
+            if not isinstance(task, WorkLogBlock):
+                # If the task is not a worklog, add its duration to the
+                # journal's total unloggable duration
+                unloggable_duration += task_duration
+            
+            # Also calculate the task's switching cost, ignoring the misc task,
+            # if any. Do NOT add to the journal's total duration at this point,
+            # as the total switching cost will be rounded at the end and added
+            # to the total duration then.
+            if task is not misc_block:
+                total_switching_cost += switching_scale.for_duration(task_duration)
+        
+        if total_switching_cost > 0:
+            # Round the switching cost and add it to the journal's total duration
+            total_switching_cost = round_duration(total_switching_cost)
+            total_duration += total_switching_cost
+            
+            # Add the estimated switching cost to the misc block's logbook,
+            # if any, so it can be allocated to a relevant Jira issue
+            if misc_block:
+                misc_block.add_to_logbook(date, total_switching_cost)
+        
+        self.total_switching_cost = total_switching_cost
+        self.unloggable_duration = unloggable_duration
+        self.total_duration = total_duration
     
     def _validate_properties(self):
         """
@@ -901,75 +965,20 @@ class Journal(Page):
         
         return valid
     
-    def _process_tasks(self):
-        """
-        Process the tasks present in the journal, performing several
-        calculations and transformations:
+    def validate(self):
         
-        * Calculate the total duration of work logged to the journal's tasks.
-        * Calculate the total estimated context switching cost of the journal's
-          tasks, based on the duration of those tasks and a sliding scale of
-          switching costs, represented by the given ``switching_cost``.
-        * Convert any ``time::`` properties on the tasks into logbook entries.
-        * Validate the tasks and compile a list of any errors encountered.
+        valid = self._validate_properties()
         
-        :param switching_cost: A ``SwitchingCost`` object for calculating
-            estimated context switching costs per task, based on their duration.
-        """
-        
-        date = self.date
-        
-        problems = self._problems
-        all_tasks = self._tasks = find_tasks(self)
-        misc_block = self.misc_block
-        
-        total_duration = 0
-        unloggable_duration = 0
-        total_switching_cost = 0
-        switching_scale = self.switching_scale
-        
-        for task in all_tasks:
-            # Perform some extra processing for tasks that aren't yet logged
-            if 'logged' not in task.properties:
-                # Convert any time:: properties to logbook entries
-                task.convert_time_property(date)
-                
-                if isinstance(task, WorkLogBlock):
-                    # Add any errors with the worklog definition to the
-                    # journal's overall list of problems
-                    problems.extend(task.validate(self.jira))
+        # If the properties aren't valid, skip validating tasks
+        if valid:
+            problems = self._problems
             
-            # Regardless of whether the task is logged or not, still include
-            # it in totals calculations
+            for entry in self.worklogs:
+                # Ignore problems in previously-logged entries
+                if 'logged' not in entry.properties:
+                    problems.extend(entry.validate(self.jira))
             
-            # Taking into account any above-converted time:: properties,
-            # calculate the task's duration and add it to the journal's
-            # total duration
-            task_duration = task.get_total_duration()
-            total_duration += task_duration
-            
-            if not isinstance(task, WorkLogBlock):
-                # If the task is not a worklog, add its duration to the
-                # journal's total unloggable duration
-                unloggable_duration += task_duration
-            
-            # Also calculate the task's switching cost, ignoring the misc task,
-            # if any. Do NOT add to the journal's total duration at this point,
-            # as the total switching cost will be rounded at the end and added
-            # to the total duration then.
-            if task is not misc_block:
-                total_switching_cost += switching_scale.for_duration(task_duration)
-        
-        if total_switching_cost > 0:
-            # Round the switching cost and add it to the journal's total duration
-            total_switching_cost = round_duration(total_switching_cost)
-            total_duration += total_switching_cost
-            
-            # Add the estimated switching cost to the misc block's logbook,
-            # if any, so it can be allocated to a relevant Jira issue
-            if misc_block:
-                misc_block.add_to_logbook(date, total_switching_cost)
-            else:
+            if self.total_switching_cost > 0 and not self.misc_block:
                 problems.insert(0, BlockProblem(
                     type='misc',
                     level='warning',
@@ -979,9 +988,7 @@ class Journal(Page):
                     )
                 ))
         
-        self.total_switching_cost = total_switching_cost
-        self.unloggable_duration = unloggable_duration
-        self.total_duration = total_duration
+        super().validate()
     
     def set_fully_logged(self, update_worklogs=True, set_done=True):
         """

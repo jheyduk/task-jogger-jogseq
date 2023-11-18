@@ -356,6 +356,7 @@ class SeqTask(Task):
             return None
         
         if show_summary:
+            journal.validate()
             self.show_journal_summary(journal)
         
         return journal
@@ -494,7 +495,7 @@ class SeqTask(Task):
             output = f'{output}\n{extra_lines}'
         
         self.stdout.write(output)
-
+    
     def _check_journal_fully_logged(self, journal):
         
         if journal.is_fully_logged:
