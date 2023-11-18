@@ -174,6 +174,7 @@ class SeqTask(Task):
             DurationContext.set_rounding_interval(self.settings.get('duration_interval', 1))
             self.get_target_duration()
             self.get_mark_done_when_logged()
+            self.get_min_duration_for_summary()
         except ValueError as e:
             self.stderr.write(f'Invalid config: {e}')
             raise SystemExit(1)
@@ -399,6 +400,26 @@ class SeqTask(Task):
             return False
         else:
             raise ValueError('Invalid value for "mark_done_when_logged" setting.')
+    
+    def get_min_duration_for_summary(self):
+        """
+        Return the configured minimum duration for summarised issues, in seconds.
+        Issues with a total duration over the summary period less than this
+        value will be omitted from the summary.
+        """
+        
+        try:
+            duration = int(self.settings.get('min_duration_for_summary', 0))
+        except ValueError:
+            duration = -1
+        
+        if duration < 0:
+            raise ValueError(
+                'Minimum duration for summary must be a number of minutes'
+                ' greater than or equal to zero.'
+            )
+        
+        return duration * 60  # convert from minutes to seconds
     
     def show_journal_summary(self, journal):
         """
