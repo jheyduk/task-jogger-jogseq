@@ -730,7 +730,8 @@ class SeqTask(Task):
         total_count = 0
         skip_counts = {
             'misc': 0,
-            'no_content': 0
+            'no_content': 0,
+            'low_duration': 0
         }
         
         # Build up a map of Jira issue IDs to Blocks that summarise the work
@@ -793,12 +794,22 @@ class SeqTask(Task):
         page.skip_counts = skip_counts
         
         # Add issue blocks as children of the page, in order of issue ID
+        min_duration = self.get_min_duration_for_summary()
         for issue_id in sorted(issue_blocks):
             block = issue_blocks[issue_id]
-            page.children.append(block)
+            
+            issue_duration = block.properties['duration']
+            
+            # If the total duration logged for the issue across the summary
+            # period doesn't meet the configured threshold, omit the issue
+            if min_duration and issue_duration < min_duration:
+                skip_counts['low_duration'] += len(block.children)
+                continue
             
             # Format the `duration` property for display
-            block.properties['duration'] = format_duration(block.properties['duration'])
+            block.properties['duration'] = format_duration(issue_duration)
+            
+            page.children.append(block)
         
         return page
     
@@ -836,8 +847,10 @@ class SeqTask(Task):
         skip_counts = digest_page.skip_counts
         misc_count_str = self.styler.label(skip_counts['misc'])
         no_content_count_str = self.styler.label(skip_counts['no_content'])
+        low_duration_count_str = self.styler.label(skip_counts['low_duration'])
         self.stdout.write(f'Skipped {misc_count_str} "miscellaneous" entries')
         self.stdout.write(f'Skipped {no_content_count_str} entries without content')
+        self.stdout.write(f'Skipped {low_duration_count_str} entries for low-duration issues')
         
         leftovers = properties['total-worklogs'] - sum(skip_counts.values())
         if not leftovers:
@@ -846,7 +859,7 @@ class SeqTask(Task):
         
         leftovers_str = self.styler.label(leftovers)
         issue_count_str = self.styler.label(len(digest_page.children))
-        self.stdout.write(f'\nRemaining {leftovers_str} entries for {issue_count_str} issues summarised')
+        self.stdout.write(f'\nSummarised remaining {leftovers_str} entries for {issue_count_str} issues')
         
         digest_page.write_back()
         
