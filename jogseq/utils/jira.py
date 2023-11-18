@@ -26,3 +26,18 @@ class Jira:
                 cache[issue_id] = True
         
         return cache[issue_id]
+    
+    def get_issue_title(self, issue_id):
+        
+        try:
+            issue = self.api.issue(issue_id, fields=['summary'])
+        except JIRAError as e:
+            # Ignore most problems fetching the Jira issue (connection issues,
+            # authentication issues, etc) and just return a null name. But if
+            # the issue ID is invalid, reflect that in the returned name.
+            if e.status_code == 404:
+                return '--- *invalid issue* ---'
+            
+            return None
+        else:
+            return issue.fields.summary

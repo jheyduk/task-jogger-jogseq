@@ -763,7 +763,7 @@ class SeqTask(Task):
                 # the given range, create a parent Block for it
                 issue_id = entry.issue_id
                 if issue_id not in issue_blocks:
-                    issue_block = Block(content=f'- {issue_id}:')
+                    issue_block = Block(content=f'- #### {issue_id}:')
                     issue_blocks[issue_id] = issue_block
                     
                     # Add a `duration` property to track the total duration
@@ -772,15 +772,17 @@ class SeqTask(Task):
                 
                 # Create a new Block for this entry, with summarised content,
                 # nested under the issue ID block
-                content = f'- {journal.date:%Y-%m-%d}: {entry.sanitised_content}'
+                content = f'- *{journal.date:%a, %b %-d}*: {entry.sanitised_content}'
                 block = Block(content=content, parent=issue_blocks[issue_id])
                 block.continuation_lines = entry.continuation_lines
                 block.children = entry.children
                 block.parent.properties['duration'] += entry_duration
         
+        self.stdout.write('\nPreparing worklog digest…')
+        
         page = Page(self.settings['graph_path'], 'Worklog Digest')
         
-        date_format = '%a, %Y-%m-%d'
+        date_format = '%a, %b %-d, %Y'
         page.properties = {
             'from-date': start_date.strftime(date_format),
             'to-date': end_date.strftime(date_format),
@@ -808,6 +810,11 @@ class SeqTask(Task):
             
             # Format the `duration` property for display
             block.properties['duration'] = format_duration(issue_duration)
+            
+            # Fetch the issue title from Jira and append to the block's
+            # content line
+            issue_title = self.jira.get_issue_title(issue_id) or ''
+            block.content = f'{block.content} {issue_title}'
             
             page.children.append(block)
         
