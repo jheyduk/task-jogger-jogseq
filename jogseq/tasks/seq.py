@@ -101,7 +101,7 @@ class Menu:
         
         If ``0`` is selected, raise ``Return`` instead, to trigger a return to
         the previous menu. Also raise ``ValueError`` if the input is not a
-        valid number, and ``IndexError`` if the number does not correspond
+        valid number, and ``KeyError`` if the number does not correspond
         to a valid menu option.
         
         :return: The handler dictionary for the selected option.
@@ -117,7 +117,7 @@ class Menu:
         if selection == 0:  # always "return to the previous menu"
             raise Return()
         
-        return self.handlers[selection]  # allow potential IndexError to propagate
+        return self.handlers[selection]  # allow potential KeyError to propagate
 
 
 class SeqTask(Task):
@@ -251,7 +251,7 @@ class SeqTask(Task):
             while not selected_option:
                 try:
                     selected_option = menu.prompt()
-                except (ValueError, IndexError):
+                except (ValueError, KeyError):
                     self.stdout.write('Invalid selection.', style='error')
             
             handler = selected_option['handler']
