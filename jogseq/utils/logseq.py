@@ -708,10 +708,17 @@ class Page(Block):
         # Do nothing by default except flag the Page has having been validated
         self._validated = True
     
-    def write_back(self):
+    def write_back(self, escape_lines=False):
         """
         Using the page's configured base graph path and title, write back to
         the corresponding markdown file.
+        
+        Optionally escape lines as they are written, to nullify various
+        elements of Logseq-specific syntax. This can be useful for summaries
+        or temporary pages whose content should not be indexed in the same
+        way as other pages (e.g. be backlinked, etc).
+        
+        :param escape_lines: Whether to escape lines as they are written.
         """
         
         with open(self.path, 'w') as f:
@@ -725,6 +732,9 @@ class Page(Block):
             # child block in full - nothing is skipped or sanitised as it
             # is for short task descriptions.
             for line in self.get_all_extra_lines(use_indentation=False, simple_output=False):
+                if escape_lines:
+                    line = escape(line)
+                
                 f.write(f'{line}\n')
 
 

@@ -868,7 +868,7 @@ class SeqTask(Task):
         issue_count_str = self.styler.label(len(digest_page.children))
         self.stdout.write(f'\nSummarised remaining {leftovers_str} entries for {issue_count_str} issues')
         
-        digest_page.write_back()
+        digest_page.write_back(escape_lines=True)
         
         self.stdout.write(
             f'\nSummary written to the {digest_page.title} page in your Logseq graph',
