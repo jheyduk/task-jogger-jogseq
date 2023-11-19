@@ -1,6 +1,7 @@
 import readline  # isort:skip # noqa # enable arrow key support in input()
 
 import datetime
+import signal
 from getpass import getpass
 from os import path
 
@@ -31,6 +32,15 @@ class Return(Exception):
         
         if self.ttl:
             raise Return(ttl=self.ttl - 1)
+
+
+def sigint_handler(signum, frame):
+    
+    # Raise Return to gracefully return to the previous menu
+    raise Return()
+
+
+signal.signal(signal.SIGINT, sigint_handler)
 
 
 class Menu:
@@ -144,8 +154,8 @@ class SeqTask(Task):
                 ('Log work to Jira', self.handle_log_work),
                 ('Summarise journals', self.handle_summarise_journals)
             )
-        except Return:
-            # The main menu was used to exit the program
+        except (Return, EOFError):
+            # The main menu was used to exit the program or Ctrl+D was pressed
             self.stdout.write('\nExiting...')
             raise SystemExit()
     
