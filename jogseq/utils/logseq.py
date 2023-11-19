@@ -7,21 +7,27 @@ from .duration import (
     round_duration
 )
 
+_keywords = ('NOW', 'LATER', 'TODO', 'DOING', 'DONE')
+_keywords_re = '|'.join(_keywords)
+
 # Recognise issue IDs as one or more letters, followed by a hyphen, followed
 # by one or more digits. The ID may optionally be wrapped in double square
 # brackets, and optionally be followed by a colon.
 # E.g. "ABC-123", "ABC-123:", "[[ABC-123]]", "[[ABC-123]]:"
 _issue_id_re = r'(\[{2})?([A-Z]+-\d+)(\]{2})?:?'
 
-# Recognise a "task block" as one starting with a keyword ("NOW", "LATER",
-# "TODO", "DOING", or "DONE"), followed by a space, at the beginning of the
-# line. The keyword can optionally be preceeded by any number of hashes,
-# representing the block's heading level.
-TASK_BLOCK_RE = re.compile(r'^\- (\#+ )?(NOW|LATER|TODO|DOING|DONE) ')
+# Recognise a keyword as one of "NOW", "LATER", "TODO", "DOING", or "DONE",
+# followed by a space, at the beginning of the line
+KEYWORD_RE = re.compile(fr'^(\s*\- )({_keywords_re}) ')
+
+# Recognise a "task block" as one starting with a keyword, followed by a space,
+# at the beginning of the line. The keyword can optionally be preceeded by any
+# number of hashes, representing the block's heading level.
+TASK_BLOCK_RE = re.compile(fr'^\- (\#+ )?({_keywords_re}) ')
 
 # An an extension of a "task block", recognise an "worklog block" using the
 # same rules, but also containing a Jira issue ID
-WORKLOG_BLOCK_RE = re.compile(fr'^\- (\#+ )?(NOW|LATER|TODO|DOING|DONE) {_issue_id_re}')
+WORKLOG_BLOCK_RE = re.compile(fr'^\- (\#+ )?({_keywords_re}) {_issue_id_re}')
 
 # Recognise heading styles as any number of hashes, followed by a space,
 # at the beginning of the line
@@ -29,6 +35,11 @@ HEADING_RE = re.compile(r'^\#+ ')
 
 # Recognise page links as any text wrapped in double square brackets
 LINK_RE = re.compile(r'\[\[(.*?)\]\]')
+
+# Recognise tags as any word following a non-escaped hash. A "word" can be
+# any group of characters excluding spaces (indicating the end of the tag)
+# or other hashes (indicating a heading).
+TAG_RE = re.compile(r'(?<!\\)(#[^# ]+)')
 
 # When content lines are trimmed (e.g. when displayed in error messages),
 # trim to this length
@@ -46,6 +57,19 @@ def sanitise(content):
     
     # Remove links (wrapping double square brackets)
     content = LINK_RE.sub(r'\1', content)
+    
+    return content
+
+
+def escape(content):
+    """
+    Escape a line parsed from a Logseq markdown file, nullifying elements of
+    Logseq-specific syntax. Escaped lines can be written back to Logseq and
+    appear as per the original, without being recognised as special syntax.
+    """
+    
+    content = KEYWORD_RE.sub(r'\1\\\2 ', content)
+    content = TAG_RE.sub(r'\\\1', content)
     
     return content
 
