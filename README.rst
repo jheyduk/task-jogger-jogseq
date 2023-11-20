@@ -9,6 +9,7 @@ Check out the ``jogger`` project `on GitHub <https://github.com/oogles/task-jogg
 ``jogseq`` provides support for the following, each of which is `covered in more detail <#features>`_ below:
 
 * Logging work to Jira as issue worklog entries
+* Summarising Logseq journals within a date range
 * More features TBA
 
 Also be sure to check out the `assumptions it makes <#assumptions>`_ and assess whether it suits your workflow.
@@ -45,6 +46,7 @@ The following optional settings are also available (see `Features`_ for details 
 * ``switching_cost``: The estimated cost of context switching between tasks, in minutes. By default, no switching cost will be calculated. If specified, it should be a range that spans no more than 30 minutes, e.g. ``1-15``. The switching cost per task will be based on that task's duration - the longer the task, the higher the switching cost. Any task longer than an hour will use the maximum switching cost. To use a fixed switching cost per task, specify the same value for both ends of the range, e.g. ``5-5``.
 * ``target_duration``: The target total duration for each daily journal, in minutes. The durations of all tasks in the journal, plus the calculated switching cost as per the above, will be compared to this figure and the difference, if any, will be reported. Defaults to ``420`` (7 hours).
 * ``mark_done_when_logged``: Whether to set worklog entries to ``DONE`` when they are marked as logged. Defaults to ``true``. Valid options are ``true``, ``false``, ``1``, and ``0``.
+* ``min_duration_for_summary``: The minimum duration, in minutes, that a Jira issue must have in order for it to be included in a journal summary. The duration is calculated as the sum of all worklog entries against the issue within the date range being summarised. A value of ``0`` disables this feature (*all* issues with worklogs during the summary period will be included in the summary). Defaults to ``0``.
 
 The following is a sample config file showing example configurations for the above::
 
@@ -59,6 +61,8 @@ The following is a sample config file showing example configurations for the abo
     switching_cost = 1-15
     target_duration = 450
     mark_done_when_logged = false
+    
+    min_duration_for_summary = 15
 
 NOTE: This assumes a task name of ``seq``, though any name can be used as long as it matches the name specified in ``jog.py`` (see below).
 
@@ -182,3 +186,29 @@ If multiple worklog blocks would use the same description, it is possible to nes
         - LATER ABC-789
 
 In this example, all three issues (``ABC-123``, ``ABC-456``, and ``ABC-789``) will be have a worklog entry submitted to Jira with "Code review" as the worklog description. The parent block itself will not be logged. Any trailing colon in the parent block's content will be stripped, but will otherwise be used verbatim.
+
+Summarising journals
+--------------------
+
+``jogseq`` can be used to summarise work entered into journals over a given date range, to allow reviewing and reporting on work done over a period of time. By default, the date range is the last 7 days, including the current day, but program prompts allow altering the start and end dates of the range.
+
+Once the worklog entries within each included journal are processed, the output is written to the "Worklog Digest" page of your Logseq graph. This page is created if it does not already exist.
+
+Properties are used to annotate the page with some useful information:
+* ``from-date``: The start date of the summarised date range.
+* ``to-date``: The end date of the summarised date range.
+* ``total-worklogs``: The total number of worklog entries within the date range.
+* ``total-duration``: The total duration of all worklog entries within the date range.
+
+Note: The ``total-worklogs`` and ``total-duration`` values will include worklog entries that were *excluded* from the summary itself, for any of the reasons covered below.
+
+The digest itself is written as a series of nested blocks, with a top-level block for each Jira issue, and child blocks for each worklog entry for that issue, including the date on which the worklog was entered. Top-level issue blocks are given a ``duration`` property totalling the durations of all worklog entries for the issue. Durations of individual worklog entries are not reported.
+
+To keep the digest as useful as possible, some issues or worklog entries may be excluded from it. Reasons for excluding a worklog entry may include:
+
+* It has the ``misc`` property. Entries with this property are expected to be generic, "catch-all" entries that are not specific to any particular issue.
+* It has no content. This is assumed to be because the task is simple and repetitive, and defined with the `Repetitive tasks`_ notation.
+
+Whole issues may also be excluded from the digest, even if their individual worklog entries would otherwise have been included, for the following reasons:
+
+* The sum of the duration of all worklog entries for the issue is less than the ``min_duration_for_summary`` setting. This setting is disabled by default (all issues will be included, regardless of duration). However, it can be configured to exclude short tasks, if such tasks are considered irrelevant for review/reporting. See `Configuration`_ for configuring ``min_duration_for_summary``.
