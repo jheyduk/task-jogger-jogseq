@@ -195,6 +195,7 @@ Summarising journals
 Once the worklog entries within each included journal are processed, the output is written to the "Worklog Digest" page of your Logseq graph. This page is created if it does not already exist.
 
 Properties are used to annotate the page with some useful information:
+
 * ``from-date``: The start date of the summarised date range.
 * ``to-date``: The end date of the summarised date range.
 * ``total-worklogs``: The total number of worklog entries within the date range.
