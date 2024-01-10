@@ -206,9 +206,8 @@ class SeqTask(Task):
         while not jira_api_token:
             jira_api_token = getpass('Jira API token: ')
         
-        jira = Jira(jira_url, jira_user, jira_api_token)
-        
         try:
+            jira = Jira(jira_url, jira_user, jira_api_token)
             user_details = jira.api.myself()
         except JIRAError as e:
             if e.status_code == 401:
