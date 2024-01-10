@@ -631,11 +631,16 @@ class SeqTask(Task):
             if extra_lines:
                 description = f'{description}\n{extra_lines}'
             
+            # Ensure the worklog appears on the journal's date, but just use
+            # a default time (in the system's local timezone)
+            timestamp = datetime.datetime.combine(journal.date, datetime.time()).astimezone()
+            
             try:
                 self.jira.api.add_worklog(
                     task.issue_id,
                     timeSpentSeconds=task.get_total_duration(),
-                    comment=description
+                    comment=description,
+                    started=timestamp
                 )
             except Exception as e:
                 self.stderr.write(
