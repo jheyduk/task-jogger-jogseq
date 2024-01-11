@@ -1,7 +1,6 @@
 import readline  # isort:skip # noqa # enable arrow key support in input()
 
 import datetime
-import signal
 from getpass import getpass
 from os import path
 
@@ -32,15 +31,6 @@ class Return(Exception):
         
         if self.ttl:
             raise Return(ttl=self.ttl - 1)
-
-
-def sigint_handler(signum, frame):
-    
-    # Raise Return to gracefully return to the previous menu
-    raise Return()
-
-
-signal.signal(signal.SIGINT, sigint_handler)
 
 
 class Menu:
@@ -267,6 +257,9 @@ class SeqTask(Task):
             args = selected_option.get('args', ())
             try:
                 handler(*args)
+            except KeyboardInterrupt:
+                # Gracefully exit the handler and return to the menu
+                pass
             except Return as e:
                 # The handler's process was interrupted in order to return
                 # to a menu. Potentially re-raise the exception if it has a
@@ -289,7 +282,7 @@ class SeqTask(Task):
         try:
             answer = input(f'{prompt} [Y/n]? ')
         except KeyboardInterrupt:
-            answer = None  # no
+            answer = ''  # no
         
         if answer.lower() != 'y':
             self.stdout.write('No action taken.')
