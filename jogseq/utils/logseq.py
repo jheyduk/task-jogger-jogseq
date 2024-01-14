@@ -322,7 +322,8 @@ class Block:
             their own extra lines, those will be indented).
         :param simple_output: Whether to generate simpler versions of the
             returned lines. Simple outputs sanitise lines to remove certain
-            Logseq-specific formatting elements, and don't include properties.
+            Logseq-specific formatting elements, don't include properties, and
+            exclude nested blocks with the `no-log` property.
         
         :return: A list of strings, each representing an "extra" line in the block.
         """
@@ -350,8 +351,13 @@ class Block:
         
         # Add any child blocks (and their extra lines)
         for child_block in self.children:
-            # Skip non-simple child blocks when generating simple output
+            # Skip non-simple child blocks (i.e. nested tasks) when generating
+            # simple output
             if simple_output and not child_block.is_simple_block:
+                continue
+            
+            # Also skip child blocks with the `no-log` property
+            if 'no-log' in child_block.properties:
                 continue
             
             child_content = child_block.sanitised_content if simple_output else child_block.content
