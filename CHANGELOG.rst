@@ -1,7 +1,14 @@
 Change Log
 ==========
 
-0.3.0 (unreleased)
+0.4.0 (unreleased)
+------------------
+
+* Journal parsing: Skip blocks with ``no-log::`` properties when generating task summaries, either for display or sending worklogs to Jira
+* ``SeqTask``: Update worklogs sent to Jira to include a "started" timestamp using the journal's date (as opposed to the time of the API request)
+
+
+0.3.0 (2023-11-22)
 ------------------
 
 * Add support for parsing/writing Logseq pages (in addition to journals)

@@ -132,6 +132,7 @@ The description used for a block's Jira worklog entry will be comprised of the b
 * The block's keyword and Jira issue ID are excluded.
 * Block properties are excluded.
 * Any child blocks using task keywords (e.g. ``TODO``, ``LATER``, ``DONE``, etc) are excluded.
+* Any child blocks with the ``no-log::`` property are excluded. See `Ignoring child blocks`_.
 * Any Logseq heading syntax will be stripped. E.g. "### Did some work" will be logged as "Did some work".
 * Any Logseq link syntax will be stripped. E.g. "Meeting with [[Bob]]" will be logged as "Meeting with Bob".
 
@@ -174,6 +175,29 @@ The scale used to calculate switching costs can be any range of values, in minut
 By default, the range is ``0-0``, effectively disabling the feature. To enable it, specify a suitable range via the ``switching_cost`` setting. See `Configuration`_.
 
 When a valid range is specified, an estimated overall context switching cost for the journal will always be calculated, reported, and included in the journal's total duration. But it is not logged to Jira as part of individual worklog blocks. Rather, it will only be logged to Jira if a generic, "miscellaneous" worklog block is present in the journal. This block should be identified by having the ``misc:: true`` property. There should only be one such block per journal. Only the first will be recognised, any additional miscellaneous blocks will be ignored and display a warning.
+
+Ignoring child blocks
+~~~~~~~~~~~~~~~~~~~~~
+
+``jogseq`` supports ignoring specific child blocks of a worklog block, by adding the ``no-log::`` property to them. While using ``no-log:: true`` is suggested, the property's value is not important, merely its presence.
+
+This can be useful for excluding certain details from the Jira worklog, maybe because they are personal notes, would not be compatible, etc. Consider the following worklog block::
+
+    - NOW ABC-123: Do a complicated thing
+        - Step 1
+        - Step 2
+        - Step 3
+        - Note to self: Never do this again.
+          no-log:: true
+
+This would result in the following Jira worklog description::
+    
+    Do a complicated thing
+    - Step 1
+    - Step 2
+    - Step 3
+
+Note that ``no-log::`` cannot be applied to a worklog block itself, only to its child blocks (it will simply be ignored). If a task block should not be logged to Jira, simply don't give it a Jira issue ID.
 
 Repetitive tasks
 ~~~~~~~~~~~~~~~~
