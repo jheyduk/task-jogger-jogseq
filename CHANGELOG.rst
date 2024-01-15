@@ -1,7 +1,7 @@
 Change Log
 ==========
 
-0.4.0 (unreleased)
+0.4.0 (2024-01-16)
 ------------------
 
 * Journal parsing: Skip blocks with ``no-log::`` properties when generating task summaries, either for display or sending worklogs to Jira
