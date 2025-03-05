@@ -12,6 +12,7 @@ class DurationContext:
     # that a duration must be before it is rounded up.
     ONE_MINUTE = (60, 30)
     FIVE_MINUTES = (300, 90)
+    FIFTEEN_MINUTES = (900, 300)
     
     rounding_interval = FIVE_MINUTES
     
@@ -27,8 +28,10 @@ class DurationContext:
             DurationContext.rounding_interval = DurationContext.ONE_MINUTE
         elif interval == 5:
             DurationContext.rounding_interval = DurationContext.FIVE_MINUTES
+        elif interval == 15:
+            DurationContext.rounding_interval = DurationContext.FIFTEEN_MINUTES
         else:
-            raise ValueError('Duration interval must be either 1 or 5.')
+            raise ValueError('Duration interval must be either 1,5 or 15.')
 
 
 class SwitchingCostScale:
